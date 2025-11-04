@@ -1,28 +1,15 @@
 ---
-title: Documentation
+title: Welcome to LEIKAH!
 linkTitle: Docs
 menu: {main: {weight: 20}}
 ---
 
-{{% pageinfo %}}
-This is a placeholder page that shows you how to use this template site.
-{{% /pageinfo %}}
+This website is a knowledge base/cheat sheet for the techniques used in Penetration Testing and Red Teaming. It aims to help students study and practice offensive security techniques and to help professionals carry out high-quality penetration tests and red team assessments. Under each technique section will be commands and code snippets that can be readily copied and used.
 
-This section is where the user documentation for your project lives - all the
-information your users need to understand and successfully use your project.
+This website does not aim to explain every detail of every technique, but it includes the prerequisites, purpose, and limitations for each of them, as well as how they can be carried out.
 
-For large documentation sets we recommend adding content under the headings in
-this section, though if some or all of them don’t apply to your project feel
-free to remove them or add your own. You can see an example of a smaller Docsy
-documentation site in the [Docsy User Guide](https://docsy.dev/docs/), which
-lives in the [Docsy theme
-repo](https://github.com/google/docsy/tree/master/userguide) if you'd like to
-copy its docs section.
 
-Other content such as marketing material, case studies, and community updates
-should live in the [About](/about/) and [Community](/community/) pages.
+{{< alert color="warning" title="Disclaimer" >}}
+The information provided on this website is intended solely for educational and ethical purposes. Unauthorized access, exploitation, or misuse of this information is illegal and strictly prohibited. By using this site, you agree to apply its contents only in lawful, authorized security testing environments and to comply with all applicable laws and regulations.
+{{< /alert >}}
 
-Find out how to use the Docsy theme in the [Docsy User
-Guide](https://docsy.dev/docs/). You can learn more about how to organize your
-documentation (and how we organized this site) in [Organizing Your
-Content](https://docsy.dev/docs/best-practices/organizing-content/).
