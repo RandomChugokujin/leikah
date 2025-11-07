@@ -65,5 +65,4 @@ $ hugo server
 Error: failed to download modules: binary with name "go" not found
 ```
 
-This error occurs if the `go` programming language is not available on your system.
-See this [section](https://www.docsy.dev/docs/get-started/docsy-as-module/installation-prerequisites/#install-go-language) of the user guide for instructions on how to install `go`.
+This error occurs if the `go` programming language is not available on your system. Ensure that `go` version 1.12 or higher is installed on your system.
