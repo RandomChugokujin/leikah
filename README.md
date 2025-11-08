@@ -1,4 +1,4 @@
-# LEIKAH
+# [LEIKAH](https://leikah.haoyingcao.xyz/en/)
 
 Stands for **Literally Everything I Know About Hacking**.
 
@@ -15,14 +15,14 @@ This website is for you if:
 
 ## Running the website locally
 
-Building and running the site locally requires a recent of [go](https://go.dev/dl/) and `extended` version of [Hugo](https://gohugo.io).
-You can find out more about how to install Hugo for your environment in our
+Building and running the site locally requires a recent `extended` version of [Hugo](https://gohugo.io) and a recent version of [go](https://go.dev/dl/).
+You can find out more about how to install Hugo for your environment in Docsy's
 [Getting started](https://www.docsy.dev/docs/getting-started/#prerequisites-and-installation) guide.
 
 Once you've made your working copy of the site repo, from the repo root folder, run:
 
 ```bash
-hugo server
+npm install && hugo server
 ```
 
 Then, navigate to `http://localhost:1313` inside your browser and you should be able to view a local version of this website.
