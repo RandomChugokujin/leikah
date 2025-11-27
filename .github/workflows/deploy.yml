@@ -1,0 +1,40 @@
+# .github/workflows/deploy.yml
+name: Build and Deploy LEIKAH to Web Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install Hugo (extended)
+      - name: Install Hugo
+        uses: peaceiris/actions-hugo@v2
+        with:
+          hugo-version: "latest"
+          extended: true
+
+      - name: Install Rsync
+        run: |
+          sudo apt update && sudo apt install rsync
+
+      - name: Build site
+        run: hugo --minify
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SERVER_DEPLOY_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p 6900 haoyingcao.xyz >> ~/.ssh/known_hosts
+
+      - name: Deploy via rsync over SSH
+        run: |
+          rsync -az --delete public/ -e 'ssh -p 6900' brian@haoyingcao.xyz:/var/www/leikah/public
