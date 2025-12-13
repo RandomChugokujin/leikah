@@ -12,7 +12,7 @@ weight: 2
 - Listening port: **111 TCP/UDP**, **2049 TCP/UDP**
 - OS: Unix-Like
 
-Network File System (NFS) is developed by Sun Microsystems in 1984, allowing a user to access files over the network as much like local storage. It builds on the **Open Network Computing Remote Procedure Call (ONC-RPC/SUN-RPC)** that listens on port 111 of both UDP and TCP.
+**Network File System (NFS)** is developed by Sun Microsystems in 1984, allowing a user to access files over the network as much like local storage. It builds on the **Open Network Computing Remote Procedure Call (ONC-RPC/SUN-RPC)** that listens on port 111 of both UDP and TCP.
 
 NFS versions:
 - NFSv2: Released in March 1989, Operates entirely via UDP
