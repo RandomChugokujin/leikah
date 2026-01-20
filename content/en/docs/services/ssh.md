@@ -16,6 +16,16 @@ SSH is an ecrypted network protocol that is often used for secure network manage
 
 The most commonly used SSH software is OpenSSH, which is developed by the OpenBSD developers. OpenSSH supports many authentication methods, including password and public-key authentication.
 
+## Attack Flow
+1. Identify SSH Version
+2. Check for if password login or public-key authentication is enabled
+3. Find SSH keys in other attack surfaces and use them to login
+    - If key protected by passphrase, try cracking with John the Ripper
+4. Leverage file read vulnerabilities to read existing SSH keys or leverage file write vulnerabilities to write your own.
+5. Login brute-forcing
+    - Password spray/Credential stuff other valid credentials on the network if password login is enabled.
+    - Try working SSH keys on other hosts if public-key authentication enabled.
+
 ## Footprinting
 Nmap Scan
 ```bash
@@ -44,6 +54,11 @@ We can use `hydra` to brute-force login.
 
 ```bash
 hydra -L user.txt -p "password" ssh://10.0.0.1
+```
+
+Alternatively, we can also use `hydra -C` to credential stuff the SSH service with valid credentials we found elsewhere. We need to provide the filename of a list of colon separated credentials (`username:password`).
+```bash
+hydra -C creds.txt ssh://10.0.0.1
 ```
 
 ## SSH Key
@@ -100,6 +115,8 @@ ssh -i <key> <user>@<host>
 
 ### Adding Generated SSH Public Key to Server
 If we have file write ability to the server, we get access to SSH login by appending our public key to a user's `$HOME/.ssh/authorized_keys` file.
+
+This can either give us initial access from a arbitrary file write or establish persistence on an already compromised system.
 
 ```bash
 echo "<public_key>" >> $HOME/.ssh/authorized_keys
