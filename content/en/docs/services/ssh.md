@@ -145,18 +145,7 @@ john --wordlist=wordlist.txt ssh_hash.txt
 ```
 
 ## File Transfer
-Once we have SSH access onto our target, we can use the `scp` utility to securely transfer file to and from our machine.
-
-To transfer file from our machine to the target, use:
-```bash
-scp [-i <key>] <file> <user>@<host>:<target_path>
-```
-- If `<target_path>` is left empty, the file will be placed in the user's home directory.
-
-To transfer file from target to our local machine, use:
-```bash
-scp [-i <key>] <user>@<host>:<file> <local_path>
-```
+See the article on [SSH File Transfer]({{% relref "/docs/file_transfer/ssh_file_transfer" %}}) for more details.
 
 ## References
 - Filenames of private SSH keys are obtained through ChatGPT.
