@@ -224,7 +224,7 @@ chmod 4755 /mnt/nfs/bash
 {{% /alert %}}
 
 ### Lateral Movement
-If `no_root_squash` is not enable, we can still escalate our privilege to any non-root user on the system using a method similar to above. The main difference is that we now have to create a user on our local machine with the same UID as the user we want access to on the server.
+If `no_root_squash` is not enabled, we can still move laterally to any non-root user on the system using a method similar to above. The main difference is that we now have to create a user on our local machine with the same UID as the user we want access to on the server.
 
 First we get the UID of the target user on the server.
 ```shell-session
