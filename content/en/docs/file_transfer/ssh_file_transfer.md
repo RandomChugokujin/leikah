@@ -53,3 +53,9 @@ Since server now runs on attacker machine, this means file will be upload from t
 ```bash
 scp <LOCAL_PATH> <USER>@<TARGET_IP>:<REMOTE_PATH>
 ```
+
+## Using SCP with Windows
+If SSH is running on a Windows host, we can still use `scp` to transfer files. The only thing to note is that backslashes (`\`) are replaced with forward slashes (`/`) in the remote path.
+```bash
+scp mimikatz.exe Administrator@10.10.0.3:C:/Temp/
+```
