@@ -151,4 +151,9 @@ We may take the NetNTLMv2 hash for offline cracking with Hashcat using mode 5600
 hashcat -m 5600 -O <hash_file> <wordlist>
 ```
 
+## Combining LLMNR Poisoning with SMB Relay Attack
+Instead of asking the user for NTLM authentication, we could instead relay authentication, using `ntlmrelayx` from Impacket, between the user and other target hosts on the network. The only requirements are:
+- SMB signing is disabled on victim and target hosts.
+- The user is a local administrator on one or more target hosts.
 
+Check on the article on [SMB relay attacks]({{< relref "/docs/active_directory/initial_access/smb_relay">}}) for more details.
