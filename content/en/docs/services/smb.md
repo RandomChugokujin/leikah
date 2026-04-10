@@ -16,16 +16,6 @@ weight: 2
 
 Samba is an open-source implementation of SMB that runs on Linux systems and is compatible with Windows SMB. Samba also comes with utilities like `smbclient` and `rpcclient` that are very useful for interacting with both SMB servers.
 
-## Attack Flow
-1. Identify SMB version & signing
-2. Enumerate SMB file shares (guest/null & credentialed access)
-3. Test ability to read and write files within shares
-4. Enumerate users (RID/RPC)
-5. Attack:
-    - EternalBlue if SMBv1 enabled
-    - SMB relay if signing disabled
-    - Password Spray if we have valid credentials
-
 ## Nmap
 Nmap Enumeration Scan with `smb-protocols` and `smb2-security-mode` scripts:
 ```shell-session
@@ -150,6 +140,59 @@ If we can no longer connect to the SMB share, use `-f` option to force unmount.
 ```bash
 sudo umount -f smb_share/
 ```
+
+### Spidering SMB File Shares
+We may also utilize tools to explore SMB shares in an automated manner. The `spider_plus` module for NetExec facilitates this from a Linux perspective.
+```bash
+nxc smb <host> -u <user> -p <password> -M spider_plus
+```
+
+NetExec explores every readable share by the current user, and saves a JSON-formatted list of readable files to disk.
+```shell-session
+╭─brian@rx-93-nu ~
+╰─$ nxc smb 10.10.0.3 -u amuro.ray -p 'Password1' -M spider_plus
+SMB         10.10.0.3       445    RA-CAILUM        [*] Windows 11 / Server 2025 Build 26100 x64 (name:RA-CAILUM) (domain:GUNDAM.local) (signing:False) (SMBv1:None)
+SMB         10.10.0.3       445    RA-CAILUM        [+] GUNDAM.local\amuro.ray:Password1
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] Started module spidering_plus with the following options:
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*]  DOWNLOAD_FLAG: False
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*]     STATS_FLAG: True
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] EXCLUDE_FILTER: ['print$', 'ipc$']
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*]   EXCLUDE_EXTS: ['ico', 'lnk']
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*]  MAX_FILE_SIZE: 50 KB
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*]  OUTPUT_FOLDER: /home/brian/.nxc/modules/nxc_spider_plus
+SMB         10.10.0.3       445    RA-CAILUM        [*] Enumerated shares
+SMB         10.10.0.3       445    RA-CAILUM        Share           Permissions     Remark
+SMB         10.10.0.3       445    RA-CAILUM        -----           -----------     ------
+SMB         10.10.0.3       445    RA-CAILUM        ADMIN$                          Remote Admin
+SMB         10.10.0.3       445    RA-CAILUM        C$                              Default share
+SMB         10.10.0.3       445    RA-CAILUM        CertEnroll      READ            Active Directory Certificate Services share
+SMB         10.10.0.3       445    RA-CAILUM        F$                              Default share
+SMB         10.10.0.3       445    RA-CAILUM        hangar          READ,WRITE
+SMB         10.10.0.3       445    RA-CAILUM        IPC$            READ            Remote IPC
+SMB         10.10.0.3       445    RA-CAILUM        NETLOGON        READ            Logon server share
+SMB         10.10.0.3       445    RA-CAILUM        SYSVOL          READ            Logon server share
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [+] Saved share-file metadata to "/home/brian/.nxc/modules/nxc_spider_plus/10.10.0.3.json".
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] SMB Shares:           8 (ADMIN$, C$, CertEnroll, F$, hangar, IPC$, NETLOGON, SYSVOL)
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] SMB Readable Shares:  5 (CertEnroll, hangar, IPC$, NETLOGON, SYSVOL)
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] SMB Writable Shares:  1 (hangar)
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] SMB Filtered Shares:  1
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] Total folders found:  22
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] Total files found:    9
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] File size average:    1.42 KB
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] File size min:        22 B
+SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] File size max:        6.2 KB
+```
+
+From the Windows Perspective, we may make use of [Snaffler](https://github.com/SnaffCon/Snaffler), a tool designed to find user credentials stored in cleartext within file shares.
+```
+Snaffler.exe -s -d <domain_fqdn> -o snaffler.log -v data
+```
+- `-s`: prints to console
+- `-o`: write results to log
+- `-v`: verbose
+    - `data` is best for console output
+
+Snaffler can produce a substantial amount of output. It is best to let it run and review its logs later.
 
 ### SMB Null Session
 Older versions of SMB may be configured to allow access to certain network resources when no username or password is provided.
