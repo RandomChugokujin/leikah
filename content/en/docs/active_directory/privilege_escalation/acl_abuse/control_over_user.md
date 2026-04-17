@@ -2,7 +2,7 @@
 title: Abuse ACL Access over User
 description: Use access rights over a user to take over that user account.
 categories: [Active Directory, Privilege Escalation]
-tags: [Active Direcotory, Privilege Escalation, Lateral Movement, ACL Abuse, Shadow Credentials, Group Managed Service Account]
+tags: [Active Direcotory, Privilege Escalation, Lateral Movement, ACL Abuse, Shadow Credentials]
 weight: 2
 ---
 
