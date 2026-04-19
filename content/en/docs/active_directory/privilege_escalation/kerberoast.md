@@ -1,8 +1,8 @@
 ---
 title: "Kerberoasting"
 description: The classic AD privilege escalation technique to crack the passwords of service accounts offline
-categories: [Active Directory]
-tags: [Active Direcotory, Kerberoast, Lateral Movement, Privilege Escalation]
+categories: [Active Directory, Lateral Movement]
+tags: [Active Direcotory, Kerberoast, Lateral Movement, Privilege Escalation, Kerberoasting]
 weight: 2
 ---
 
