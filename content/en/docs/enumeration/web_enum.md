@@ -1,7 +1,7 @@
 ---
-title: Web Recon
+title: Web Enumeration
 description: Gathering information on web directories, vhosts, subdomains and technologies
-categories: [Enumeration, Web Recon]
+categories: [Enumeration, Web Enumeration]
 tags: [Enumeration, Nmap, Gobuster, Ffuf]
 weight: 2
 ---
@@ -85,4 +85,54 @@ gobuster dir -u <URL> -w <WORDLIST>
 Ffuf is a web fuzzer that can also be used for directory busting. It will replace the keyword `FUZZ` with each entry in the wordlist.
 ```bash
 ffuf -w <WORDLIST> -u <URL>/FUZZ
+```
+
+## Parameter Discovery
+Web pages may use GET and/or POST parameters to send data to be processed by the back-end. These parameters may open up vectors of attacks if not validated and sanitized properly. While we can discover parameters while we visit and interact with the pages, there may be hidden parameters that we can possibly reveal through fuzzing.
+
+The procedure for parameter fuzzing is to first fuzz for parameter name, then fuzz their values. We need to establish a baseline for how the server responds to normal requests (e.g. status code, content, headers, timing), which will be used to differentiate interesting input that make the web server behave differently, through which may be able to discover page parameters and interesting values.
+
+### GET Parameters
+GET parameters and their values embedded within the URL with a `?`, and each subsequent parameter is linked to the previous one using `&`.
+```txt
+http://example.com/index.php?var1=value1&var2=value2
+```
+
+We can fuzz for possible GET parameters using `ffuf` by placing the `FUZZ` keyword as the name of the parameter, and set a dummy value such as `1` or `test`.
+- We can use [burp-parameter-names.txt](https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/burp-parameter-names.txt) from SecLists to discover parameters.
+```txt
+ffuf -u http://example.com/index.php?FUZZ=test -w <wordlist> [-fs <filter_size>]
+
+```
+
+After we discovered a parameter name, we may test for their values by move the `FUZZ` keyword to the parameter value.
+- The choice of wordlist depends on the inferred functionality of the parameter within the page. For instance, we could use a list of numbers if the parameter discovered is called `id`.
+- We can also use wordlists that test for specific vulnerabilities (e.g. [LFI-Jhaddix.txt](https://github.com/danielmiessler/SecLists/blob/master/Fuzzing/LFI/LFI-Jhaddix.txt)).
+```txt
+ffuf -u http://example.com/index.php?<param_name>=FUZZ -w <wordlist> [-fs <filter_size>]
+```
+
+After finding values that causes the server to behave differently, we should test manually (e.g. with `curl` or Burp) to see how exactly does the server's response deviate from the baseline. From there, we can conclude whether we have discovered a possible vulnerability.
+
+### POST Parameters
+The procedure for discovering POST parameters are similar. POST parameters are appened to the end of the POST request and each parameter are separated by an `&`.
+```txt
+POST /index.php HTTP/1.1
+Host: example.com
+
+var1=value1&var2=value2
+```
+
+We can use `-X POST` to tell `ffuf` to fuzz using the POST method and `-d` to specify the data we want to send. The `FUZZ` keyword can also be placed within the POST data.
+
+POST parameter name fuzz:
+```bash
+ffuf -w <wordlist>:FUZZ -u http://example.com/index.php -X POST -d 'FUZZ=test' \
+-H 'Content-Type: application/x-www-form-urlencoded' [-fs <filter_size>]
+```
+
+POST parameter value fuzz:
+```bash
+ffuf -w <wordlist>:FUZZ -u http://example.com/index.php -X POST -d '<param_name>=FUZZ' \
+-H 'Content-Type: application/x-www-form-urlencoded' [-fs <filter_size>]
 ```
