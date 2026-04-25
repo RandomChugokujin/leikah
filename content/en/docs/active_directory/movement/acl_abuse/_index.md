@@ -1,5 +1,5 @@
 ---
-title: Active Directory ACL Abuse
+title: ACL Abuse
 description: Abuse of ACL access rights to achieve lateral movement
 categories: [Active Directory, Privilege Escalation]
 tags: [Active Direcotory, Privilege Escalation, Lateral Movement, ACL Abuse]

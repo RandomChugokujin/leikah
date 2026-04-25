@@ -1,5 +1,5 @@
 ---
-title: Active Directory Credentialed Enumeration
+title: Credentialed Enumeration
 description: Get a full view of the domain after obtaining a set a credentials
 categories: [Active Directory, Enumeration]
 tags: [Active Direcotory, Enumeration]

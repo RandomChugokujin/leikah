@@ -1,5 +1,5 @@
 ---
-title: Active Directory Initial Access
+title: Initial Access
 description: What do I have to do to get my first set of domain credentials?
 categories: [Active Directory]
 tags: [Active Direcotory, Initial Access]

@@ -35,7 +35,7 @@ Set-DomainUserPassword -Identity <target_user> -AccountPassword $NewPassword
 ## Targeted Kerberoasting
 We can leverage the ability to write the target user's `servicePrincipalName` property (`GenericAll` or `GenericWrite` access required) to create a fake SPN and Kerberoast it like a normal service account and recover the target user's password via offline cracking. However, our ability to recover the plaintext password depends on the user's password strength.
 
-Check out the article on [Kerberoasting]({{< relref "/docs/active_directory/privilege_escalation/kerberoast/#targeted-kerberoasting">}}) for more details.
+Check out the article on [Kerberoasting]({{< relref "/docs/active_directory/movement/kerberos/kerberoast/#targeted-kerberoasting">}}) for more details.
 
 ## Shadow Credentials
 **Shadow Credentials** abuses the ability to write to the `msDS-KeyCredentialLink` attribute of the target user. The attribute is normally used for Windows Hello for Business or other Passwordless authentication in the Active Directory environment.
