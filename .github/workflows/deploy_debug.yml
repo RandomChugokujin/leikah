@@ -1,0 +1,32 @@
+# .github/workflows/deploy.yml
+name: Debug site build workflow
+
+on:
+  push:
+    branches:
+      - '**'
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install Hugo (extended)
+      - name: Install Hugo
+        uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "latest"
+          extended: true
+
+      - name: Install other dependencies
+        run: |
+          sudo apt update && sudo apt install rsync npm
+
+      - name: Build site
+        run: |
+          hugo mod get -u
+          npm install
+          hugo --minify
