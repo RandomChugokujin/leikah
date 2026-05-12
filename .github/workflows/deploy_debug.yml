@@ -19,6 +19,11 @@ jobs:
         with:
           go-version: '1.26.3'  # Match the Go version you use locally
 
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 26
+
       # Install Hugo (extended)
       - name: Install Hugo
         uses: peaceiris/actions-hugo@v3
@@ -28,10 +33,10 @@ jobs:
 
       - name: Install other dependencies
         run: |
-          sudo apt update && sudo apt install rsync npm
+          sudo apt update && sudo apt install rsync
 
       - name: Build site
         run: |
           hugo mod get -u
-          npm install
+          npm ci
           hugo --minify
