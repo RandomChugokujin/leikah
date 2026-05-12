@@ -27,6 +27,7 @@ jobs:
 
       - name: Build site
         run: |
+          hugo mod get -u
           npm install
           hugo --minify
 
