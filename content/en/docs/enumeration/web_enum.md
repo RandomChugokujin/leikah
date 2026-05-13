@@ -48,6 +48,53 @@ However, CT logs also provides a publically available and definitive list of sub
 gobuster vhost -u http://<target_IP_address> -w <wordlist_file> --append-domain
 ```
 
+## Screenshotting Web Applications
+When we have a large number of websites to test, rather than browsing them one-by-one manually, we can use create screenshots with automated tools such as [EyeWitness](https://github.com/RedSiege/EyeWitness) and [Aquatone](https://github.com/michenriksen/aquatone). These tools will visit each website, create a screenshot, and compile a report in HTML for easy review.
+
+### EyeWitness
+EyeWitness is designed It can be provided a list of URLs to visit using `-f`, as well as XML-formatted Nmap reports using `-x`.
+```bash
+eyewitness --web -f urls.txt -d haoyingcao.xyz
+```
+
+```bash
+eyewitness --web -x nmap.xml -d haoyingcao.xyz
+```
+The report will group websites by their perceived value. EyeWitness attempts to identify if the website is a commercial or open-source application. It also provides other information such as the HTTP reponse headers as well as default credentials for any common applications if finds.
+
+Other options for this tool include:
+- `--user-agent`: Specify value for User-Agent header for the requests.
+- `--proxy-ip`: Specify IP address of a web proxy.
+- `--resolve`: Resolve IP/Hostname for targets
+- `-d`: Directory name for report
+- `--threads`: Number of threads to use
+
+### Aquatone
+Aquatone is a tool similar to EyeWitness written in Go. We can use Aquatone by piping it a list of targets, allowing for easy intergration. The target can be in the form of URLs, domains, and IP addresses.
+```bash
+cat targets.txt | aquatone
+```
+Alternatively, we can also feed it Nmap XML report if we run Aquatone with the `-nmap` option.
+```bash
+cat nmap.xml | aquatone -nmap
+```
+
+By default, Aquatone creates the report within its current working directory. The report structure looks like the following:
+- `aquatone_report.html`: Main HTML report that we can open with a web browser.
+- `aquatone_urls.txt`: A file containing all responsive URLs.
+- `aquatone_session.json`: A file containing statistics and page data. Useful for automation.
+- `headers/`: A folder with files containing raw response headers from processed targets
+- `html/`: A folder with files containing the raw response bodies from processed targets. If you are processing a large amount of hosts, and don't need this for further analysis, you can disable this with the -save-body=false flag to save some disk space.
+- `screenshots/`: A folder with PNG screenshots of the processed targets
+
+Report destination can be specified using `-out` argument or the `AQUATONE_OUT_PATH` environment variable.
+```bash
+cat targets.txt | aquatone -out aquatone_report
+```
+```bash
+export AQUATONE_OUT_PATH="~/aquatone"
+```
+
 ## File/Directory Discovery
 Each website or applications contain different files, directories and endpoints. Other than navigating to them like normal users, we can also discover them in multiple ways:
 
@@ -80,11 +127,23 @@ gobuster dir -u <URL> -w <WORDLIST>
     - `-t <THREAD_COUNT>`: Adjust the amount of threads
     - `-k`: Skip TLS validation, useful if the website uses a self-signed certificate.
     - `-b`: Blacklist status codes, can handle comma-separated lists and ranges.
-    - `--xl`: Blacklist responses with a certian length, can handle comma-separated lists and ranges.
+    - `--xl`: Blacklist responses with a certain length, can handle comma-separated lists and ranges.
 
 Ffuf is a web fuzzer that can also be used for directory busting. It will replace the keyword `FUZZ` with each entry in the wordlist.
 ```bash
 ffuf -w <WORDLIST> -u <URL>/FUZZ
+```
+
+### Git Repo Dumping
+Suppose a `.git` directory was found on web server. This almost certainly means a Git repository is hosted on the web server. We can use a script such as [git-dumper](https://github.com/arthaud/git-dumper) to dump the Git repository. This could allow us to read the web application's source code, find vulnerabilities or discover sensitive information.
+
+```bash
+python git-dumper.py <URL> <repo_dump_path>
+```
+
+We could use a tool such as [trufflehog](https://github.com/trufflesecurity/trufflehog) to scan the repo for any leaked credentials such as passwords, tokens, or API keys.
+```bash
+trufflehog --repo_path <repo_dump_path>
 ```
 
 ## Parameter Discovery
