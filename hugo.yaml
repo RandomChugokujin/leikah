@@ -32,6 +32,17 @@ pygmentsUseClassic: false
 # See https://help.farbox.com/pygments.html
 pygmentsStyle: nord
 
+mediaTypes:
+  text/redirects:
+    delimiter: ''
+
+outputFormats:
+  redirects:
+    baseName: _redirects
+    isPlainText: true
+    mediaType: text/redirects
+    root: true
+
 # Configure how URLs look like per section.
 permalinks:
   blog: /:section/:year/:month/:day/:slug/
@@ -182,7 +193,7 @@ module:
   # workspace: docsy.work
   hugoVersion:
     extended: true
-    min: 0.146.0
+    min: 0.157.0
   imports:
     - path: github.com/google/docsy
       disable: false
