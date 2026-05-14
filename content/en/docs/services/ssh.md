@@ -2,7 +2,7 @@
 title: SSH
 description: Secure Shell
 categories: [Services]
-tags: [Services, SSH]
+tags: [Services, SSH, Remote Management]
 weight: 2
 ---
 
