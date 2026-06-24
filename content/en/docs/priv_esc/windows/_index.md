@@ -1,5 +1,5 @@
 ---
-title: Windows Privilege Escalation
+title: Windows
 description: Become Administrator (or SYSTEM)!
 categories: [Privilege Escalation]
 tags: [Privilege Escalation, Windows]

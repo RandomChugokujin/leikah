@@ -1,5 +1,5 @@
 ---
-title: Linux Privilege Escalation
+title: Linux
 description: Become root!
 categories: [Privilege Escalation]
 tags: [Privilege Escalation, Linux]
