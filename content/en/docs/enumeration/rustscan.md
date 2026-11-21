@@ -8,7 +8,7 @@ weight: 2
 
 ## [Rustscan](https://github.com/bee-san/RustScan)
 
-Rustscan's project repo describes itself as a modern port scanner. It scans a large batch of ports asynchronously, reducing the overhead from threads and system calls. Thus achieving a scanning speed leagues ahead of Nmap. However, Rustscan is not a direct replacement for Nmap, as the former lacks much of the Service scanning capabilities. Rustscan would in fact feed the ports it found open during its scan into an Nmap scan, allowing the user to use Nmap for service enumeration or Nmap script scans.
+Rustscan's project repo describes it as a modern port scanner. It scans a large batch of ports asynchronously to discover open ports quickly. However, Rustscan is not a direct replacement for Nmap's service enumeration capabilities. By default, Rustscan feeds the ports it finds open into an Nmap scan, allowing the user to use Nmap for service enumeration or Nmap script scans.
 
 ## Basic Usage
 For a basic run, use `-a` to specify the host(s), which accepts multiple types of arguments:
@@ -17,9 +17,9 @@ Single or comma-delimited list of IP addresses:
 ```bash
 rustscan -a 127.0.0.1,0.0.0.0
 ```
-Single or comma-delimited list of hostnames, or hostnames mixed with IP addresses
+Single or comma-delimited list of hostnames, or hostnames mixed with IP addresses:
 ```bash
-rustscan -a www.google.com, 127.0.0.1
+rustscan -a www.google.com,127.0.0.1
 ```
 CIDR subnets:
 ```bash
@@ -40,7 +40,7 @@ rustscan -a 'hosts.txt'
 ```
 
 ## Specifying Ports
-Use `-p` to specify individual ports or comma-delimited list of ports:
+Use `-p` to specify individual ports or a comma-delimited list of ports:
 ```bash
 rustscan -a 127.0.0.1 -p 53
 ```
@@ -48,27 +48,27 @@ rustscan -a 127.0.0.1 -p 53
 rustscan -a 127.0.0.1 -p 53,80,121,65535
 ```
 
-Use `-r` to specify a range of ports
+Use `-r` to specify a range of ports:
 ```bash
 rustscan -a 127.0.0.1 --range 1-1000
 ```
 
 ## Nmap Arguments
-Use the `--` to specify the arguments passed to the Nmap run Rustscan initiates after it finishes its own scan.
+Use `--` to specify the arguments passed to the Nmap run Rustscan initiates after it finishes its own scan.
 
 For example, the following Rustscan command:
 ```bash
 rustscan -a 127.0.0.1 -- -A -sC
 ```
-Runs the Nmap commnad:
+Runs an Nmap command like the following with the default Nmap integration (`$PORTS` represents the discovered ports):
 ```bash
 nmap -Pn -vvv -p $PORTS -A -sC 127.0.0.1
 ```
 
 ## Performance Tuning
-Since Rustscan is very aggressive out of the box, it could potentially trigger defenses to block your IP address. To prevent that from occurring, we can:
+Since Rustscan is very aggressive out of the box, it could potentially trigger defenses to block your IP address. To reduce the scanning load, without guaranteeing that defenses will not detect or block it, we can:
 1. Decrease batch size: Use the `-b <number>` argument to specify a smaller batch size.
-2. Increase timeout: Use the `-T <timeout>` argument to specify a longer timeout, in milliseconds, so that Rustscan would wait longer for each port.
+2. Increase timeout: Use the `-t <timeout>` argument to specify a longer timeout, in milliseconds, so that Rustscan waits longer for each port.
 
 ## Config File
 Rustscan accepts a TOML configuration file in the user's home directory, allowing the user to specify certain default arguments for each scan. The config file is read from `~/.rustscan.toml`.
@@ -81,11 +81,11 @@ The following options can be specified:
 - `command`
 - `accessible`
 - `greppable`
-- `batch-size`
+- `batch_size`
 - `timeout`
 - `ulimit`
 
-Example config:
+Example config for RustScan 2.4.1 (`ports` defines a custom top-port list used with `--top`; `range` selects the normal scan range). Newer versions may use a different `ports` format, so check the documentation for your installed version:
 ```toml
 addresses = ["127.0.0.1", "192.168.0.0/30", "www.google.com"]
 command = ["-A"]

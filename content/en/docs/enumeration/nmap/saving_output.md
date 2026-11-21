@@ -1,12 +1,12 @@
 ---
 title: Saving Nmap Output
-description: Learn to how save Nmap outputs in different formats
+description: Learn how to save Nmap output in different formats
 categories: [Enumeration, Network Enumeration]
 tags: [Enumeration, Nmap, Reporting]
 weight: 2
 ---
 
-Nmap supports three types of output format:
+Nmap's three commonly used file output formats are:
 
 Normal (plaintext, `.nmap` extension):
 ```bash
@@ -31,7 +31,7 @@ PORT      STATE SERVICE
 # Nmap done at Thu Oct 30 16:46:36 2025 -- 1 IP address (1 host up) scanned in 55.94 seconds
 ```
 
-Grepable (plaintext, `.gnmap` extension):
+Grepable (plaintext, `.gnmap` extension; deprecated in favor of XML):
 ```bash
 nmap -oG <filename> <hosts>
 ```
@@ -42,7 +42,11 @@ Host: 10.129.2.49 ()	Status: Up
 Host: 10.129.2.49 ()	Ports: 22/open/tcp//ssh///, 80/open/tcp//http///, 110/open/tcp//pop3///, 139/open/tcp//netbios-ssn///, 143/open/tcp//imap///, 445/open/tcp//microsoft-ds///, 31337/open/tcp//Elite///
 # Nmap done at Thu Oct 30 16:46:36 2025 -- 1 IP address (1 host up) scanned in 55.94 seconds
 ```
-XML (`.xml` extension)
+XML (`.xml` extension):
+```bash
+nmap -oX <filename> <hosts>
+```
+Sample (preserved as captured; the lowercase `<!doctype>` makes this example invalid XML, and the lowercased command flags are not reusable commands):
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <!doctype nmaprun>
@@ -82,15 +86,15 @@ XML (`.xml` extension)
 </nmaprun>
 ```
 
-To have Nmap output in all three formats, use the `-oA <filename_prefix>` option. The `<filename_prefix>` portion will be prepended to each of the three type of file extensions in the filenames.
+To have Nmap output in all three formats, use the `-oA <filename_prefix>` option. Nmap appends `.nmap`, `.gnmap`, and `.xml` to the prefix. With `-oN`, `-oG`, or `-oX`, supply the complete filename, including any desired extension.
 ```bash
 nmap -oA <filename_prefix> <hosts>
 ```
 
 ## Formatting XML into HTML
-We can use the XML output from Nmap to create an HTML report that is easy to read. We can use the `xsltproc` command to do so, which applies a XSTL style sheet to the XML output and generates an HTML file.
+We can use valid XML output from Nmap to create an HTML report that is easy to read. The `xsltproc` command applies an XSLT stylesheet to the XML output and generates an HTML file. Install `xsltproc` and ensure the stylesheet referenced by the XML is accessible.
 ```bash
 xsltproc <xml_filename> -o <html_filename>
 ```
-View of the sample result on the browser:
+View of the sample result in the browser:
 ![](/img/nmap/nmap_html.png)

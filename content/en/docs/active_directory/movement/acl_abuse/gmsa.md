@@ -2,28 +2,28 @@
 title: Group Managed Service Account
 description: Read the NT password hash of Group Managed Service Accounts (gMSA)
 categories: [Active Directory, Privilege Escalation]
-tags: [Active Direcotory, Privilege Escalation, Lateral Movement, ACL Abuse, Group Managed Service Account]
+tags: [Active Directory, Privilege Escalation, Lateral Movement, ACL Abuse, Group Managed Service Account]
 weight: 2
 ---
 
-The need to protect service accounts against attacks such as Kerberoasting gave rise to **Managed Service Accounts (MSA)** and later **Group Managed Service Accounts (gMSA)**. While both supports automatic password generation and rotation, the latter allows the same service accounts to be used acrossed different machines.
+**Managed Service Accounts (MSAs)** and later **Group Managed Service Accounts (gMSAs)** simplify service account password management. Their long, automatically generated passwords also resist attacks such as Kerberoasting. While both support automatic password generation and rotation, the latter allows the same service account to be used across different machines.
 
-Members of the group that manage the gMSA are intended to be the machine accounts of the computers where the service account will be deployed on. Members have the ability to read the password hash of the service account (`ReadGMSAPassword`).
+The principals allowed to retrieve a gMSA's managed password are configured through `PrincipalsAllowedToRetrieveManagedPassword`, commonly using a group containing the computer accounts where the service will run. These principals can read `msDS-ManagedPassword` and derive the account's NT hash (`ReadGMSAPassword` in BloodHound); this is password retrieval access, not general management of the gMSA.
 
 
-In the demo below, the Machine Account `MSN-04-SAZABI$` is part of the `WEBSERVERS` group, which manages the gMSA named `GMSAWEBAPP$`. The `WEBSERVERS` group has `ReadGMSAPassword` access over the gMSA.
+In the demo below, the machine account `MSN-04-SAZABI$` is part of the `WEBSERVERS` group, which is allowed to retrieve the managed password of `GMSAWEBAPP$`. The `WEBSERVERS` group has `ReadGMSAPassword` access over the gMSA.
 
 ![](/img/gmsa/gmsa_bh.png)
 
 If an attacker gains admin access on one of the machines whose machine account is part of the management group, the attacker can dump the machine account hash, then use Pass-the-Hash to authenticate and read the password of the gMSA, expanding their access to all services running under the service account.
 
 ## Linux Perspective
-From a Linux attacker machine, [gMSADumper](https://github.com/micahvandeusen/gMSADumper) may be used to dump
+From a Linux attacker machine, [gMSADumper](https://github.com/micahvandeusen/gMSADumper) may be used to read the managed password and derive its NT hash:
 ```bash
 gMSADumper.py -u <machine_account> -p :<machine_account_nt_hash> -d <domain>
 ```
 
-Altneratively, we may use **Netexec** with `--gmsa` option over LDAP to read the password of the gMSA.
+Alternatively, we may use **NetExec** with the `--gmsa` option over LDAP to read the password of the gMSA.
 ```bash
 nxc ldap <dc_ip> -u <machine_account> -H <machine_account_nt_hash> --gmsa
 ```
@@ -37,7 +37,7 @@ LDAP        10.10.0.3       389    RA-CAILUM        Account: gmsaWebApp$        
 ```
 
 ## Windows Perspective
-From a Winodows machine, [GMSAPasswordReader](https://github.com/rvazarkar/GMSAPasswordReader) may be used to achieve the same.
+From a Windows machine, [GMSAPasswordReader](https://github.com/rvazarkar/GMSAPasswordReader) may be used to achieve the same.
 ```cmd
 .\gmsapasswordreader.exe --accountname <gmsa_account>
 ```

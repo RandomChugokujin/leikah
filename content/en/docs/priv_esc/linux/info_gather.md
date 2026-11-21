@@ -11,6 +11,8 @@ Enumeration is key to privilege escalation. After gaining initial shell access, 
 - **Kernel Version**
 - **Running Services**
 
+The captures below are illustrative snapshots from different systems and versions, not a single current installation.
+
 ## Situational Awareness
 After getting a shell onto a Linux target, we should try to run a few commands to orient ourselves:
 - `whoami`: username
@@ -22,7 +24,7 @@ After getting a shell onto a Linux target, we should try to run a few commands t
 ## Operating System Information
 
 ### Linux Distribution
-We also want to know what Linux Distribution is running on the target. Different distros have different tools and utilities available on the system that may aid our privilege escalation.
+We also want to know which Linux distribution is running on the target. Different distros have different tools and utilities that may aid privilege escalation.
 ```shell-session
 ubuntu@ubuntu:~$ cat /etc/*release*
 DISTRIB_ID=Ubuntu
@@ -43,14 +45,14 @@ PRIVACY_POLICY_URL="https://www.ubuntu.com/legal/terms-and-policies/privacy-poli
 UBUNTU_CODENAME=plucky
 LOGO=ubuntu-logo
 ```
-Alternatively, we can also check `/etc/*issue`
+Alternatively, check the login banner in `/etc/issue`; banners can be customized and are not authoritative OS identification.
 ```shell-session
 ubuntu@ubuntu:~$ cat /etc/issue
 Ubuntu 25.04 \n \l
 ```
 
 ### Kernel Version
-Kernel version can help us look up known vulnerabilities (DirtyPipe, CopyFail, etc.)
+Kernel version can help us look up known vulnerabilities (Dirty Pipe, etc.). Check the exact distribution package and security advisories: vendors may backport fixes without changing the upstream version.
 ```shell-session
 ubuntu@ubuntu:~$ uname -a
 Linux ubuntu 6.14.0-15-generic #15-Ubuntu SMP PREEMPT_DYNAMIC Sun Apr  6 15:05:05 UTC 2025 x86_64 x86_64 x86_64 GNU/Linux
@@ -82,7 +84,7 @@ SSH_TTY=/dev/pts/1
 _=/usr/bin/env
 ```
 
-Specifically, it may be beneficial to note the `PATH` environment variable. If any of the paths are writable by our user, we may be able to use PATH hijacking to achieve privilege escalation.
+Specifically, it may be beneficial to note the `PATH` environment variable. If a privileged program searches a `PATH` containing a directory writable by our user, we may be able to use PATH hijacking. Our shell's `PATH` alone does not prove this; check the privileged process environment and sudo's `secure_path`.
 ```shell-session
 ubuntu@ubuntu:~$ env | grep PATH
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/snap/bin
@@ -105,7 +107,7 @@ ubuntu@ubuntu:~$ cat /etc/shells
 ## Users and Groups
 
 ### `/etc/passwd`
-All users on the system are stored in `/etc/passwd`. Despite its name, the file no longer store password information on all modern Linux systems.
+Local user accounts are stored in `/etc/passwd`; directory-backed accounts may require `getent passwd`. Modern Linux systems usually store password hashes in `/etc/shadow` instead.
 
 Structure of `/etc/passwd` entry:
 
@@ -114,14 +116,14 @@ Structure of `/etc/passwd` entry:
 | root: | x: | 0: | 0: | root: | /root:| /bin/bash |
 
 1. Login name
-2. Passwword (x: password in shadow file, *:user cannot login)
+2. Password (`x`: hash in shadow file; `*`: password authentication disabled, not necessarily other login methods)
 3. User ID (UID)
 4. Primary Group ID (GID)
 5. Comment Field/User full name
-5. User home directory path
+6. User home directory path
 7. User default login shell
 
-Interactive users can be found from `/etc/passwd` by grepping `sh$` for valid login shells.
+Grepping `sh$` in `/etc/passwd` finds likely shell accounts, but may miss other interactive shells and include restricted ones.
 ```shell-session
 ubuntu@ubuntu:~$ grep "sh$" /etc/passwd
 
@@ -132,7 +134,7 @@ ubuntu:x:1002:1002::/home/ubuntu:/bin/bash
 ```
 
 ### Logged-on Users
-Check currently on the system with commands such as `w`, `who` or `finger`.
+Check users currently logged on to the system with commands such as `w`, `who` or `finger`.
 ```shell-session
 ubuntu@ubuntu:~$ w
 
@@ -142,9 +144,9 @@ jsmith   pts/0    10.10.14.16      Tue19   40:54m  0.02s  0.02s -bash
 ```
 
 ### Group Information
-The `/etc/groups` file shows a list of groups on the system as well as their members:
+The `/etc/group` file lists local groups and their explicitly listed supplementary members. Primary group membership is recorded in `/etc/passwd`; `id <user>` shows a user's groups:
 ```shell-session
-ubuntu@ubuntu:~$ cat /etc/groups
+ubuntu@ubuntu:~$ cat /etc/group
 
 root:x:0:
 daemon:x:1:
@@ -156,7 +158,7 @@ disk:x:6:
 [...]
 ```
 
-Individual group membership can also be queried using `getent`:
+Group entries, including those from configured directory services, can also be queried using `getent`:
 ```shell-session
 ubuntu@ubuntu:~$ getent group sudo
 
@@ -211,7 +213,7 @@ lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
         TX packets 183  bytes 17353 (17.3 KB)
         TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
 ```
-Note IP addresses in on different interfaces, as well as subnet mask.
+Note IP addresses on different interfaces, as well as subnet masks.
 
 ### Network Routes
 ```shell-session
@@ -223,14 +225,14 @@ default         _gateway        0.0.0.0         UG    100    0        0 enp1s0
 ```
 
 ### ARP Information
-Are there any other hosts the target has been connecting to?
+Check cached local-link neighbors; ARP is not a complete connection history.
 ```shell-session
 ubuntu@ubuntu:~$ arp -a
 _gateway (192.168.122.1) at 52:54:00:03:21:e5 [ether] on enp1s0
 ```
 
 ### Name Resolution
-Check `/etc/hosts`, are there interesting hosts specified?
+Check `/etc/hosts` for interesting host entries:
 ```shell-session
 ubuntu@ubuntu:~$ cat /etc/hosts
 127.0.0.1 localhost
@@ -275,7 +277,7 @@ search .
 
 ```
 
-Ubuntu, Fedora, and other popular Linux distros may use **Systemd-Resolved** to manage name resolution. If you see the contents like show above inside `/etc/resolv.conf`, we can further enumerate name resolution configuration:
+Ubuntu, Fedora, and other popular Linux distros may use **systemd-resolved** to manage name resolution. If `/etc/resolv.conf` contains a stub configuration like the one above, inspect the upstream DNS configuration:
 ```shell-session
 ubuntu@ubuntu:~$ resolvectl status
 Global
@@ -291,17 +293,20 @@ Current DNS Server: 192.168.122.1
 ```
 
 ## Packages and Utilities
-List installed packages and note outdated packages.
+On Debian/Ubuntu, list installed packages and their full versions. Compare vendor advisories before treating an old upstream version as vulnerable.
 ```bash
-apt list --installed | tr "/" " " | cut -d" " -f1,3 | sed 's/[0-9]://g' | tee -a installed_pkgs.list
+dpkg-query -W -f='${binary:Package} ${Version}\n' | tee installed_pkgs.list
 ```
 
-Check for executables installed against [GTFObins](https://gtfobins.github.io/)
+Check available executables against [GTFOBins](https://gtfobins.org/). Package names do not necessarily match executable names; a match alone does not establish exploitable privileges.
 ```bash
-for i in $(curl -s https://gtfobins.org/api.json | jq -r '.executables | keys[]'); do if grep -q "$i" installed_pkgs.list; then echo "Check for GTFO: $i";fi; done
+curl -fsS https://gtfobins.org/api.json | jq -r '.executables | keys[]' |
+while IFS= read -r i; do
+    command -v "$i" >/dev/null 2>&1 && printf 'Check for GTFO: %s\n' "$i"
+done
 ```
 
-Sudo version information, useful for looking up known privilege escalation vulnerabilities.
+Check the Sudo version when researching known privilege escalation vulnerabilities; compare the full package version with vendor advisories.
 ```shell-session
 ubuntu@ubuntu:~$ sudo -V
 
@@ -314,15 +319,15 @@ Sudoers I/O plugin version 1.8.31
 ## Service Configuration
 
 ### SSHD
-Check `/etc/ssh/sshd_config` for the SSH daemon configuration:
-- Is root allowed to login?
-- Cleartext passwords allowed?
-- Any users disallowed from login via SSH?
+Check `/etc/ssh/sshd_config`, included files, and applicable `Match` blocks for the SSH daemon configuration:
+- Is root allowed to log in?
+- Is password authentication allowed? SSH encrypts authentication traffic.
+- Are any users disallowed from logging in via SSH?
 
 ### Web Servers
 Check for virtual hosts that weren't discovered before.
 
-Apache2 configs live under `/etc/apache2`:
+On Debian/Ubuntu, Apache2 configs commonly live under `/etc/apache2`:
 ```txt
 /etc/apache2/
 ├── apache2.conf
@@ -335,7 +340,7 @@ Apache2 configs live under `/etc/apache2`:
 └── mods-enabled/
 ```
 
-Nginx configs live under `/etc/nginx`:
+Nginx configs commonly live under `/etc/nginx`; the `sites-*` layout shown here is distribution-specific:
 ```txt
 /etc/nginx/
 ├── nginx.conf
@@ -368,7 +373,7 @@ Vendor ID:                AuthenticAMD
 
 ### Disk Information
 Run `lsblk` to see block devices available on the system and their mount points if they are mounted.
-- In Ubuntu systems, `lsblk` also shows the Snap packages installed as loop devices
+- On Ubuntu systems, mounted Snap images commonly appear as loop devices.
 ```shell-session
 ubuntu@ubuntu:~$ lsblk
 

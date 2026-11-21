@@ -6,12 +6,12 @@ tags: [Enumeration, Nmap]
 weight: 2
 ---
 
-Nmap is **the** go-to port scanner for security professionals and researchers for many years. It allows open ports on computers to be discovered over the network by sending packets to each port and analyze how the host responds.
+Nmap has been **the** go-to port scanner for security professionals and researchers for many years. It discovers open ports on computers over the network by sending probes to selected ports and analyzing how the host responds.
 
-Penetration Testers often use port scanners like Nmap to conduct **Active Recon** on the targets being assessed.
+Penetration testers often use port scanners like Nmap to conduct **Active Recon** on the targets being assessed.
 
 ## TL;DR
-Here are a few commands to get you started with nmap quickly:
+Here are a few commands to get you started with Nmap quickly:
 
 Basic run:
 ```bash
@@ -26,9 +26,9 @@ My favorite Nmap scan command for CTFs and exams:
 sudo nmap -sVC -T4 -oN <filename> <hosts>
 ```
 
-[Ippsec](https://www.youtube.com/@ippsec)'s Nmap scan command as seen in his HTB walkthroughts:
+[Ippsec](https://www.youtube.com/@ippsec)'s Nmap scan command as seen in his HTB walkthroughs:
 - `-vv`: Double verbose output
-- `-oA nmap/<filename_prefix>`: Save output in all three formats (normal, greppable, XML) to a directory
+- `-oA nmap/<filename_prefix>`: Save output in all three formats (normal, grepable, XML) to the `nmap` directory, which must already exist
 ```bash
 sudo nmap -sC -sV -vv -oA nmap/<filename_prefix> <hosts>
 ```

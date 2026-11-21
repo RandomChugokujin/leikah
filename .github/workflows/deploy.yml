@@ -28,7 +28,7 @@ jobs:
       - name: Install Hugo
         uses: peaceiris/actions-hugo@v3
         with:
-          hugo-version: "0.161.1"
+          hugo-version: "0.170.0"
           extended: true
 
       - name: Install other dependencies
@@ -37,9 +37,9 @@ jobs:
 
       - name: Build site
         run: |
-          hugo mod get -u
-          npm install
-          hugo --minify
+          npm ci
+          npm run hugo -- mod npm pack
+          npm run build:production
 
       - name: Setup SSH
         run: |

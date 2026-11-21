@@ -12,26 +12,26 @@ weight: 2
 - Listening port: **22 (TCP)**
 - OS: Unix-Like (more commonly), Windows
 
-SSH is an ecrypted network protocol that is often used for secure network management, file transfer and tunneling that replaced unsecure protocol such as Telnet, Berkeley R-Suite protocols.
+SSH is an encrypted network protocol used for secure remote management, file transfer, and tunneling. It replaces insecure protocols such as Telnet and the Berkeley r-commands.
 
 The most commonly used SSH software is OpenSSH, which is developed by the OpenBSD developers. OpenSSH supports many authentication methods, including password and public-key authentication.
 
 ## Attack Flow
 1. Identify SSH Version
-2. Check for if password login or public-key authentication is enabled
-3. Find SSH keys in other attack surfaces and use them to login
-    - If key protected by passphrase, try cracking with John the Ripper
+2. Check whether password login or public-key authentication is enabled
+3. Find SSH keys through other attack surfaces and use them to log in
+    - If a key is protected by a passphrase, try cracking it with John the Ripper
 4. Leverage file read vulnerabilities to read existing SSH keys or leverage file write vulnerabilities to write your own.
 5. Login brute-forcing
     - Password spray/Credential stuff other valid credentials on the network if password login is enabled.
-    - Try working SSH keys on other hosts if public-key authentication enabled.
+    - Try working SSH keys on other hosts if public-key authentication is enabled.
 
 ## Footprinting
 Nmap Scan
 ```bash
 sudo nmap -A -p22 <host>
 ```
-By default, OpenSSH allows plaintext password authentication, however, it's considered best practice to use only public key authentication and disable login for root user.
+OpenSSH supports password authentication, but passwords travel inside the encrypted SSH transport, not in plaintext on the network. Defaults vary by distribution and server policy; prefer public-key authentication and restrict direct root login.
 
 We can see what login options are available by using the `-v` flag during login.
 ```shell-session
@@ -41,7 +41,7 @@ debug1: Reading configuration data /etc/ssh/ssh_config
 [...]
 debug1: Authentications that can continue: publickey,password,keyboard-interactive
 ```
-To force the server to use password authentication, we use the `-o` flag to specify option `PreferredAUthentications`.
+To request only password authentication from the client, use `-o PreferredAuthentications=password`. This cannot enable a method disabled by the server.
 ```bash
 ssh -v <user>@<host> -o PreferredAuthentications=password
 ```
@@ -56,19 +56,15 @@ We can use `hydra` to brute-force login.
 hydra -L user.txt -p "password" ssh://10.0.0.1
 ```
 
-Alternatively, we can also use `hydra -C` to credential stuff the SSH service with valid credentials we found elsewhere. We need to provide the filename of a list of colon separated credentials (`username:password`).
+Alternatively, we can also use `hydra -C` to credential stuff the SSH service with valid credentials we found elsewhere. We need to provide the filename of a list of colon-separated credentials (`username:password`).
 ```bash
 hydra -C creds.txt ssh://10.0.0.1
 ```
 
 ## SSH Key
-OpenSSH can be configured to use public-private key to login. To use public key login, the client must generate its own public-private key pair and share **ONLY the public key** to the server. During authentication, the server generates a cryptographic problem using the client's public key and sends it to the client. If the client can successfully decrypt the problem and send back the solution, the client is authenticated and granted access.
+OpenSSH supports public-key authentication. Generate a key pair and share **ONLY the public key** with the server. The client signs session-bound authentication data with its private key; the server verifies the signature using an authorized public key. The private key is not sent to the server.
 
-Currently, OpenSSH supports 4 common types of SSH keys:
-- RSA
-- Ed25519
-- ECDSA
-- DSA
+Common OpenSSH key types include RSA, Ed25519, and ECDSA, plus FIDO-backed variants. DSA is legacy: disabled by default since OpenSSH 7.0 and removed in OpenSSH 10.0.
 
 To generate our own SSH keys, we can use the `ssh-keygen` utility, which prompts us for the key file path and an optional passphrase. The utility will generate a private key with the original provided filename, and a public key with a `.pub` extension.
 ```shell-session
@@ -98,7 +94,7 @@ total 8
 -rw------- 1 brian wheel 411 Dec  4 12:40 key
 -rw-r--r-- 1 brian wheel  96 Dec  4 12:40 key.pub
 ```
-By default, `ssh-keygen` generate keys using the `ed25519` protocol. We can use the `-t` argument to specify the algorithm of public key we want to generate. The available options are:
+OpenSSH 9.5 and later default to Ed25519 keys (older versions defaulted to RSA). Use `-t` to choose a key algorithm; common options, subject to version/build support, include:
 - `ecdsa`
 - `ecdsa-sk`
 - `ed25519`
@@ -108,35 +104,35 @@ By default, `ssh-keygen` generate keys using the `ed25519` protocol. We can use 
 ssh-keygen -t <algorithm>
 ```
 
-Use `-i` option for `ssh` to specify the path of the private key file.
+Use the `-i` option for `ssh` to specify the path of the private key file.
 ```bash
 ssh -i <key> <user>@<host>
 ```
 
 ### Adding Generated SSH Public Key to Server
-If we have file write ability to the server, we get access to SSH login by appending our public key to a user's `$HOME/.ssh/authorized_keys` file.
+If public-key login is enabled and the account is permitted to log in, appending our public key to its configured `AuthorizedKeysFile` (normally `$HOME/.ssh/authorized_keys`) may grant SSH access. Ownership, permissions, and key restrictions must also pass server checks.
 
-This can either give us initial access from a arbitrary file write or establish persistence on an already compromised system.
+This can either give us initial access from an arbitrary file write or establish persistence on an already compromised system.
 
 ```bash
 echo "<public_key>" >> $HOME/.ssh/authorized_keys
 ```
-Then we can use the associated private key to login.
+Then we can use the associated private key to log in.
 
 ### Reading SSH Private Keys
-If we found a file read vulnerability, we can use it to read the user's SSH private keys. Users' SSH private keys are stored on in `$HOME/.ssh/` directory, and can have one of the following default filenames, each corresponding to the public key encryption protocol they use:
+If we find a file-read vulnerability, we can use it to read the user's SSH private keys. SSH private keys are commonly stored in `$HOME/.ssh/`, but may be elsewhere. Common default filenames reflect their key algorithm:
 - `id_rsa`
 - `id_ed25519`
 - `id_ecdsa`
 - `id_dsa`
 
-After reading the key and saving it to a file, the SSH client requires the permission on the file to be `600` (owner read-write only) before using it to login.
+After saving a private key, restrict access to its owner. `chmod 600` is a typical choice; mode `400` also works. OpenSSH rejects overly accessible private keys, not every mode other than `600`.
 ```bash
 chmod 600 <ssh_key>
 ```
 
 ### SSH Key Passphrase Brute Forcing
-SSH private keys may be protected via a passphrase. We can use John the Ripper, a CPU-based password cracker to recover the passphrase.
+SSH private keys may be protected via a passphrase. We can use John the Ripper, a CPU-based password cracker, to recover the passphrase.
 
 We can first obtain the password hash by using the `ssh2john` script included in the John the Ripper Jumbo version, then use `john` to crack it.
 ```bash
@@ -148,5 +144,5 @@ john --wordlist=wordlist.txt ssh_hash.txt
 See the article on [SSH File Transfer]({{% relref "/docs/file_transfer/ssh_file_transfer" %}}) for more details.
 
 ## References
-- Filenames of private SSH keys are obtained through ChatGPT.
+- [OpenSSH ssh-keygen manual](https://man.openbsd.org/ssh-keygen) (key algorithms and default filenames).
 - [Use John the Ripper to Crack SSH Private Keys](https://labex.io/tutorials/kali-use-john-the-ripper-to-crack-ssh-private-keys-594223)

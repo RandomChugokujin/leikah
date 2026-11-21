@@ -2,11 +2,11 @@
 title: Domain User and Group Enumeration
 description: Enumerate users and groups within an Active Directory domain
 categories: [Active Directory, Enumeration]
-tags: [Active Direcotory, Enumeration]
+tags: [Active Directory, Enumeration]
 weight: 2
 ---
 
-With the ability to authenticate to an Active Directory domain, we can now get a full list of users and groups on the domain. This can be helpful for us to plan further attacks and expand our access within the domain.
+With the ability to authenticate to an Active Directory domain, we can usually enumerate its users and groups, subject to directory permissions. This can help us plan further attacks and expand our access within the domain.
 
 ## Domain Users
 
@@ -15,7 +15,7 @@ The `--users` option may be used with **NetExec** to enumerate domain users. Not
 ```bash
 nxc ldap <dc_host> -u <username> -p <password> --users
 ```
-NetExec presents us with a list of users, when their password is last set, number of failed login attempts (for password spraying), as well as the description field.
+NetExec presents us with a list of users, when their passwords were last set, their bad-password counts, and their description fields. Bad-password counts are DC-specific and are not a reliable domain-wide measure of remaining attempts before lockout; check applicable password and lockout policies before any authorized password testing.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ nxc ldap 10.10.0.3 -u amuro.ray -p 'Password1' --users
@@ -31,14 +31,14 @@ LDAP        10.10.0.3       389    RA-CAILUM        Char.Aznable                
 LDAP        10.10.0.3       389    RA-CAILUM        svc_sql                       2025-06-06 00:13:47 0        Password: Qwerty123
 LDAP        10.10.0.3       389    RA-CAILUM        Bright.Noa                    2025-06-21 11:58:21 0
 ```
-[Windapsearch](https://github.com/ropnop/windapsearch/blob/master/windapsearch.py) can query the domain controller for all domain users via LDAP. The `-U` option queries for all objects where `objectCategory=user`.
+[Windapsearch](https://github.com/ropnop/windapsearch/blob/master/windapsearch.py) can query the domain controller for domain users via LDAP using the `-U` option.
 ```bash
 windapsearch.py -d <domain_fqdn> --dc-ip <dc_ip> -u <DOMAIN>\\<username> -p <password> -U
 ```
-- `<DOMAIN>` specified within `-u` should not include TLD (`GUNDAM.LOCAL` -> `GUNDAM\\amuro.ray`)
+- `<DOMAIN>` within `-u` is the domain's NetBIOS name, which is not necessarily the DNS name without its suffix. In the Bash commands above and below, `\\` passes a single literal backslash (for example, `GUNDAM\\amuro.ray`).
 
 ### Windows Perspective
-The `Get-ADUser` cmdlet from the built-in Active Directory PowerShell module can be used to enumerate domain users from a Windows machine.
+The `Get-ADUser` cmdlet from the Active Directory PowerShell module can be used to enumerate domain users from a Windows machine. The module must be installed (for example, through RSAT on a workstation), and a domain controller must be reachable. These examples assume a domain-authenticated session; PowerView examples also require importing `PowerView.ps1`.
 ```shell-session
 PS C:\Users\Administrator> Get-ADUser -Filter * | select SamAccountName
 
@@ -171,7 +171,7 @@ SamAccountName    : Administrators
 SID               : S-1-5-32-544
 ```
 
-A list of domain groups can also be obtained using `Get-DomainGroups` function from PowerView.
+A list of domain groups can also be obtained using the `Get-DomainGroup` function from PowerView.
 ```shell-session
 PS C:\research> Get-DomainGroup | select name
 
@@ -190,7 +190,7 @@ Performance Log Users
 [...]
 ```
 
-To list out members to a group, we use `Get-ADGroupMember` cmdlet:
+To list members of a group, we use the `Get-ADGroupMember` cmdlet:
 ```shell-session
 PS C:\research> Get-ADGroupMember -Identity Administrators
 
@@ -224,7 +224,7 @@ SamAccountName    : Administrator
 SID               : S-1-5-21-790304770-1385196242-1780550448-500
 ```
 
-The PowerView function `Get-DomainGroupMember` achives the above, with the added ability to unroll nested group memberships when used with `-Recurse` option.
+The PowerView function `Get-DomainGroupMember` achieves the above and can expand nested group memberships when used with the `-Recurse` option. The native `Get-ADGroupMember` cmdlet also supports recursive enumeration, using `-Recursive`.
 ```shell-session
 PS C:\research> Get-DomainGroupMember -Identity "Domain Admins" -Recurse
 
@@ -250,9 +250,9 @@ MemberSID               : S-1-5-21-790304770-1385196242-1780550448-500
 
 
 ## Domain Computers
-Computer accounts are special user accounts that is assigned to each domain-joined computer for it to participate in the domain. They can be enumerated using the `--computers` option with NetExec.
+Computer accounts are accounts assigned to domain-joined computers so they can participate in the domain. They can be enumerated using the `--computers` option with NetExec.
 ```bash
-nxc ldap <dc_host> -u <username> -p <password> --users
+nxc ldap <dc_host> -u <username> -p <password> --computers
 ```
 ```shell-session
 ╭─brian@rx-93-nu ~
@@ -267,7 +267,7 @@ LDAP        10.10.0.3       389    RA-CAILUM        SINANJU$
 LDAP        10.10.0.3       389    RA-CAILUM        MSZ-006-ZETA$
 ```
 
-From the Windows Perspective, `Get-DomainComputer` may be used to find comptuer accounts.
+From the Windows perspective, the PowerView function `Get-DomainComputer` may be used to find computer accounts.
 ```shell-session
 PS C:\research> Get-DomainComputer | select samaccountname
 
@@ -281,19 +281,19 @@ MSZ-006-ZETA$
 ```
 
 ## RID Cycling
-RID Cycling is a technique used to enumerate users and groups on Windows systems. Every account (users and groups) have a **Security Identifier (SID)** that looks like the following:
+RID cycling is a technique used to enumerate users and groups on Windows systems. Domain accounts and groups have a **Security Identifier (SID)** that looks like the following:
 ```txt
 S-1-5-21-<domain identifier>-RID
 ```
-The `RID` portion (Relative Identifier) uniquely identifies a objects within a domain.
+The `RID` portion (Relative Identifier) uniquely identifies an object within that domain.
 
 RID Cycling cycles through ranges of valid RIDs to enumerate valid users and accounts.
 
-> The number of users and groups discovered depend on the maximum and minimum RID values being cycled. This is especially true within very large organizations.
+> The number of users and groups discovered depends on the maximum and minimum RID values being cycled. This is especially true within very large organizations.
 
 We can use `lookupsid.py` from Impacket for this purpose.
 ```bash
-lookupsid.py <user>:<password>@<host> [<max_sid>]
+lookupsid.py <user>:<password>@<host> [<max_rid>]
 ```
 ```shell-session
 ╭─brian@rx-93-nu ~
@@ -341,7 +341,7 @@ Impacket v0.13.0.dev0 - Copyright Fortra, LLC and its affiliated companies
 1125: GUNDAM\SQLServer2005SQLBrowserUser$RA-CAILUM (SidTypeAlias)
 ```
 
-NetExec also have option `--rid-brute` for us to perform the same enumeration technique.
+NetExec also has the `--rid-brute` option for performing the same enumeration technique.
 ```bash
 nxc smb <host> -u <username> -p <password> --rid-brute
 ```
@@ -358,10 +358,10 @@ SMB         10.10.0.3       445    RA-CAILUM        512: GUNDAM\Domain Admins (S
 [...]
 ```
 
-> Tip: we can grep for `SidTypeUser` if we only want a list of users or `SidTypeGroup` for a list of groups.
+> Tip: we can grep for `SidTypeUser` to include user and computer accounts, or `SidTypeGroup` for groups. Some groups appear as `SidTypeAlias`, so include that type when collecting all groups.
 
 ## SPN Users
-Identifying service accounts, i.e. accounts with one or more **Service Principal Names (SPNs**) help us find opportunities for attack such as Kerberoasting or Silver Ticket.
+Identifying user accounts with one or more **Service Principal Names (SPNs)** helps us find potential Kerberoasting targets. Not all service accounts have SPNs, and computer accounts commonly have SPNs too. Forging a Silver Ticket additionally requires the relevant service account's key; an SPN alone is not enough.
 
 We may use `GetUserSPNs.py` without the `-request` option to get a list of service accounts and their SPNs.
 ```bash
@@ -383,9 +383,9 @@ Alternatively, windapsearch with option `--user-spns` may also be used to retrie
 windapsearch.py -d <domain_fqdn> --dc-ip <dc_ip> -u <DOMAIN>\\<username> -p <password> --user-spns
 ```
 
-From the Windows Perspective, `Get-ADUser` may be used with filter `ServicePrincipalName -ne "$null"` to obtain SPN accounts.
+From the Windows perspective, `Get-ADUser` may be used with an LDAP presence filter to obtain user accounts with SPNs.
 ```powershell
-Get-ADUser -Filter {ServicePrincipalName -ne "$null"} -Properties ServicePrincipalName
+Get-ADUser -LDAPFilter '(servicePrincipalName=*)' -Properties ServicePrincipalName
 ```
 
 Alternatively, the `Get-DomainUser` function from PowerView may be used with `-SPN` option.
@@ -394,7 +394,7 @@ Get-DomainUser -SPN | select samaccountname,serviceprincipalname
 ```
 
 ## Users with Kerberos Pre-Authentication Disabled
-There is an option to disable requirement for Kerberos Pre-Authentication inside the UAC options for users within Active Directory. The user is thus vulnerable to AS-REProasting. We can identify AS-REProastable users with `GetNPUsers.py` without the `-request` option from Impacket on a Linux Machine.
+The userAccountControl (UAC) flags for Active Directory users include an option to disable the requirement for Kerberos pre-authentication. Such accounts may be vulnerable to AS-REP roasting. We can identify these accounts with `GetNPUsers.py` from Impacket on a Linux machine, using valid credentials and omitting the `-request` option to enumerate rather than request roastable responses.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ GetNPUsers.py -dc-ip 10.10.0.3 GUNDAM.LOCAL/amuro.ray:Password1
@@ -416,7 +416,7 @@ useraccountcontrol : NORMAL_ACCOUNT, DONT_EXPIRE_PASSWORD, DONT_REQ_PREAUTH
 ```
 
 ## Logged on Users
-If our user have admin privileges on the target (indicated by NetExec with the yellow `Pwn3d!` marker), we can enumerate logged on users using option `--loggedon-users`
+If our user has admin privileges on the target (indicated by NetExec with the yellow `Pwn3d!` marker), we can attempt to enumerate logged-on users using the `--loggedon-users` option. Remote service access and host policy can still prevent enumeration.
 ```bash
 nxc smb <host> -u <username> -p <password> --loggedon-users
 ```

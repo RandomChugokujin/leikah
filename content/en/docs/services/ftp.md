@@ -8,32 +8,32 @@ weight: 2
 
 ## Service Info
 - Name: File Transfer Protocol (FTP)
-- Purpose: Transferring, sharing files over the network
+- Purpose: Transferring and sharing files over the network
 - Listening port: **TCP port 21**
 - OS: Unix-Like (more commonly), Windows
 
 FTP has two channels of communication:
-- **Control Connection**: used for client to send commands and server to respond with status codes
+- **Control Connection**: used by the client to send commands and by the server to respond with status codes
 - **Data Connection**: used for data transfer between the client and server
 
 ### Active vs. Passive Connections
-FTP has two types of connections, **active** and **passive**. The main difference is on who initiates the data connection when a file is being transferred.
-- **Active**: Client initiates control connect from source port `N` to the server port 21. Client starts listening on port `N+1` and sends `N+1` to the server. Server initiates data connection to client on port N+1 and the file transfer begins.
-- **Passive**: Client initiates control connect from source port `N` to the server port 21. When passive mode is switched on with the `passive` command, the server sends a port `M`. The client initiates data connections to port `M` on the FTP server.
+FTP has two transfer modes, **active** and **passive**. The main difference is who initiates the data connection when a file is being transferred.
+- **Active**: The client opens the control connection to server TCP port 21 and advertises a listening address/port using `PORT` or `EPRT`. The server initiates the data connection to that port (traditionally from TCP port 20); the client port need not be `N+1`.
+- **Passive**: The client opens the control connection to server TCP port 21. `PASV` or `EPSV` requests a server listening port, and the client initiates the data connection to it. The interactive `passive` command is a client-side toggle, where supported.
 
-The main reason for the passive mode FTP is that many clients, often desktops and workstations, have firewalls installed, which could block the server's data connect to the client during active mode. Firewalls tend to be a lot less restrictive to outgoing connections. Therefore, in passive mode, client initiates the data connection.
+The main reason for passive-mode FTP is that many clients, often desktops and workstations, have firewalls installed, which could block the server's data connection to the client during active mode. Firewalls tend to be less restrictive about outgoing connections. Therefore, in passive mode, the client initiates the data connection.
 
 ## Footprinting
 Nmap service and default script scan:
 ```bash
 sudo nmap -sV -p21 -sC -A <host>
 ```
-The default NSE scripts ran on the FTP service are:
-- `ftp-anon` checks if FTP server allows for anonymous access. If so, it lists the contents of the FTP root for the anonymous user
-- `ftpsyst` executes the `STAT` command, which displays information about the FTP server status.
+Default NSE scripts for the FTP service include:
+- `ftp-anon` checks if the FTP server allows anonymous access. If so, it lists the contents of the FTP root for the anonymous user
+- `ftp-syst` sends `SYST` and `STAT` to obtain system and server-status information.
 
 ### Manual Banner Grabbing
-Use Netcat for plaintext TCP connection:
+Use Netcat for a plaintext TCP connection:
 ```bash
 nc -nv <host> 21
 ```
@@ -44,7 +44,7 @@ openssl s_client -connect <host>:21 -starttls ftp
 ```
 
 ### Anonymous Login
-FTP has an option to allow anonymous users to login to the server. To check if an FTP server has that option enabled, use the `ftp-anon` NSE script mentioned above, or try logging in via the the `ftp` client.
+FTP has an option to allow anonymous users to log in to the server. To check if an FTP server has that option enabled, use the `ftp-anon` NSE script mentioned above, or try logging in via the `ftp` client.
 ```shell-session
 $ ftp 10.129.14.136
 
@@ -73,10 +73,10 @@ The FTP client (`ftp`) can be used to browse the files and directories on the FT
 ftp <host>
 ```
 
-Below are a few FTP basic client commands. Note some of them may or may not be implemented on specific servers
+Below are a few basic FTP client commands. Support varies by client and server; listing flags such as `-a` and `-R` are not portable FTP protocol options.
 - `ls <dir>`: list directory
 - `ls -a <dir>`: list directory, including hidden files
-- `ls -R <dir>`: Recursive list directory
+- `ls -R <dir>`: recursively list a directory
 - `cd <dir>`: change directory
 - `get <file>`: download remote file
 - `put <file>`: upload local file
@@ -86,7 +86,7 @@ Below are a few FTP basic client commands. Note some of them may or may not be i
 - `bye`/`quit`: disconnect from server and exit the client
 
 ### Netcat Manual Interaction
-Alternatively, we can also manually interact with the service using Netcat. Use the `USER <username>` and `PASS <password>` to login.
+Alternatively, we can also manually interact with the service using Netcat. Use the `USER <username>` and `PASS <password>` commands to log in.
 ```shell-session
 $ nc localhost 21
 220 (vsFTPd 3.0.5)
@@ -144,9 +144,9 @@ The `--no-passive-ftp` option disables passive transfer mode:
 wget --no-passive-ftp -m ftp://<username>:<password>@<host>
 ```
 
-If the username or password contains special characters, use the `--user` and `--password` flags to specify the credential separately
+If the username or password contains URL-special characters, use the `--user` and `--password` flags to specify the credentials separately. Quote or escape shell-special characters as well; these flags do not disable shell interpretation.
 ```bash
-wget -m --user=<username> --password=<password> ftp://<host>
+wget -m --user='<username>' --password='<password>' ftp://<host>
 ```
 
 ## References

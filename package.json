@@ -1,6 +1,6 @@
 {
   "name": "docsy-example-site",
-  "version": "0.15.0",
+  "version": "0.18.1",
   "description": "Example site that uses Docsy theme for technical documentation.",
   "repository": "github:google/docsy-example",
   "homepage": "https://example.docsy.dev",
@@ -15,7 +15,7 @@
     "_commit:public": "HASH=$(git rev-parse --short main); cd public && git add -A && git commit --allow-empty -m \"Site at $HASH\"",
     "_diff:check": "git diff --name-only --exit-code",
     "_fix:permissions": "chmod -R u+w public/* 2>/dev/null || true",
-    "_get:docsy": "hugo mod get github.com/google/docsy@v$npm_package_version",
+    "_get:docsy": "hugo mod get github.com/docsy/docsy/theme@v$npm_package_version",
     "_hugo-dev": "npm run _hugo -- -e dev --logLevel info -DFE",
     "_hugo": "hugo --cleanDestinationDir",
     "_local": "npx cross-env HUGO_MODULE_WORKSPACE=docsy.work",
@@ -39,23 +39,25 @@
     "precheck:links:all": "npm run build",
     "precheck:links": "npm run build",
     "seq": "bash -c 'for cmd in \"$@\"; do npm run $cmd || exit 1; done' - ",
-    "serve": "npm run _serve",
+    "serve": "hugo server --renderToMemory",
     "test-and-fix": "npm run fix && npm run test-only",
     "test-only": "npm run check:links",
     "test": "npm run test-and-fix",
-    "update:docsy:main": "hugo mod get -u github.com/google/docsy@main && hugo mod tidy",
-    "update:docsy:mod": "hugo mod get -u github.com/google/docsy && hugo mod tidy",
+    "update:docsy:main": "hugo mod get -u github.com/docsy/docsy/theme@main && hugo mod tidy",
+    "update:docsy:mod": "hugo mod get -u github.com/docsy/docsy/theme && hugo mod tidy",
     "update:hugo": "npm install --save-dev --save-exact hugo-extended@latest",
     "update:main": "npm run update:packages && npm run update:docsy:main",
     "update:packages": "npx npm-check-updates -u",
-    "update": "npm run update:packages && npm run update:docsy:mod"
+    "update": "npm run update:packages && npm run update:docsy:mod",
+    "hugo": "hugo"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.24",
     "cross-env": "^10.1.0",
-    "hugo-extended": "0.157.0",
+    "hugo-extended": "0.170.0",
     "postcss-cli": "^11.0.1",
-    "rtlcss": "^4.3.0"
+    "rtlcss": "^4.3.0",
+    "sass-embedded": "1.106.1"
   },
   "optionalDependencies": {
     "npm-check-updates": "^19.3.2",
@@ -69,5 +71,8 @@
     "proseWrap": "always",
     "singleQuote": true
   },
-  "cSpell:ignore": ""
+  "cSpell:ignore": "",
+  "workspaces": [
+    "packages/hugoautogen"
+  ]
 }

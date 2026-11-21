@@ -182,7 +182,7 @@ Inline code inside table cells should still be distinguishable.
 | Language    | Code               |
 |-------------|--------------------|
 | Javascript  | `var foo = "bar";` |
-| Ruby        | `foo = "bar"{`      |
+| Ruby        | `foo = "bar"`      |
 
 ----------------
 

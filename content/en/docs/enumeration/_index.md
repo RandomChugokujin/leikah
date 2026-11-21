@@ -6,6 +6,6 @@ tags: [Enumeration]
 weight: 2
 ---
 
-Gathering information is the first and one of the most vital stage of penetration testing. It helps to learn about the target systems we are assessing, as well as revealing information that could aid to the discovery and/or exploitation of vulnerabilities.
+Gathering information is the first and one of the most vital stages of penetration testing. It helps us learn about the target systems we are assessing and reveals information that could aid in the discovery and/or exploitation of vulnerabilities.
 
-Enumeration methodologies varies by the environment. Below are high-level summaries for three main types of environment.
+Enumeration methodologies vary by environment. The following pages cover network and web enumeration techniques.

@@ -6,7 +6,8 @@ command = "npm run build:preview"
 publish = "public"
 
 [build.environment]
-GO_VERSION = "1.22.2"
+GO_VERSION = "1.26.3"
+NODE_VERSION = "26"
 
 [context.production]
 command = "npm run build:production"

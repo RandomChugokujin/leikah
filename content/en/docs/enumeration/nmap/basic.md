@@ -37,7 +37,7 @@ The `<hosts>` argument can be:
 - CIDR: `10.129.2.0/24`
 - Hostnames: `example.com`
 
-To have Nmap read the list of host to scan from the a file, use `-iL` to specify the filename:
+To have Nmap read the list of hosts from a file, use `-iL` to specify the filename. This example performs host discovery only (`-sn`):
 ```shell-session
 $ cat hosts.txt
 10.129.2.18
@@ -49,39 +49,39 @@ nmap -sn -iL hosts.txt
 ```
 
 ## Port Specification
-To specify specific ports and ranges to scan, use the `-p` argument:
+To specify ports and ranges to scan, use the `-p` argument:
 ```bash
 nmap -p <ports> <hosts>
 ```
-The `-p` argument accepts
+The `-p` argument accepts:
 - Individual port numbers: `80`, `22,80`
 - Ranges of ports: `1-1000`
-- Combination of both: `22,80,100-500`
+- A combination of both: `22,80,100-500`
 
-For a complete scan of all ports (1-65535), use the `-p-` flag for a short hand.
+For a complete scan of ports 1-65535 in the selected protocol, use the `-p-` shorthand (TCP by default).
 ```bash
-nmap -p- <number> <hosts>
+nmap -p- <hosts>
 ```
 
-Alternatively, use `--top-ports` to specify the number of top common ports to scan. By default, Nmap scans the top 1000 common ports.
+Alternatively, use `--top-ports` to specify the number of most common ports to scan. By default, Nmap scans the 1000 most common ports per selected protocol.
 ```bash
 nmap --top-ports <number> <hosts>
 ```
 
-`-F` flag is equivalent to `--top-ports 100` for Nmap.
+With the standard `nmap-services` frequency data, `-F` scans the 100 most common ports per selected protocol, like `--top-ports 100`.
 ```bash
 nmap -F <hosts>
 ```
 ### Port Scanning without Ping Probes
 
-Nmap performs a ping probe to ensure the host is up and reachable before beginning a port scan. However, certain operating systems (like on Windows by default) may not respond to ping. As a result, it may cause Nmap to conclude that the host is not up.
+Nmap normally performs host discovery before beginning a port scan. These probes may use ICMP, TCP, or local-network ARP/IPv6 Neighbor Discovery, depending on privileges and the network. Firewalls may block the probes even when services are reachable, causing Nmap to conclude that the host is not up.
 ```shell-session
 $ nmap 10.10.65.55
 Starting Nmap 7.98 ( https://nmap.org ) at 2025-10-27 20:58 -0500
 Note: Host seems down. If it is really up, but blocking our ping probes, try -Pn
 Nmap done: 1 IP address (0 hosts up) scanned in 3.02 seconds
 ```
-As its output suggest, we can re-scan the host with the `-Pn` option, which bypasses the ping probe and starts the port scan right away.
+As its output suggests, we can re-scan the host with `-Pn`, which skips normal host discovery and attempts to scan every specified host. Local Ethernet targets still normally require ARP/Neighbor Discovery.
 ```shell-session
 $ nmap 10.10.65.55 -Pn
 Starting Nmap 7.98 ( https://nmap.org ) at 2025-10-27 21:23 -0500
@@ -132,15 +132,15 @@ Discovered open port 22/tcp on 10.129.2.28
 ```
 
 ## Host Discovery
-Use the `-sn` flag to disable port-scanning for Nmap and only perform ping probes against the host(s) specified
+Use `-sn` to disable port scanning and perform host discovery against the specified hosts. This is not limited to ICMP ping.
 ```bash
 nmap -sn <hosts>
 ```
 
-## Perfomance Tuning
-Nmap gives 6 templates to tune the aggresiveness of our scans, from 0 being the slowest and 5 being the fastest. However, a more aggresive profile could cause Nmap to have more false negatives as it sets a shorter timeout for the host to respond.
+## Performance Tuning
+Nmap gives 6 templates to tune the aggressiveness of our scans, from 0 being the slowest to 5 being the fastest. However, a more aggressive profile could cause more false negatives as it sets shorter timeouts for the host to respond.
 
-Choose a timing template with `-T`
+Choose a timing template with `-T`:
 - `-T0` / `-T paranoid`
 - `-T1` / `-T sneaky`
 - `-T2` / `-T polite`

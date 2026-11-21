@@ -1,23 +1,23 @@
 ---
 title: Initial Enumeration
-description: Enumeration of AD domain without credentials
+description: Enumeration of an AD domain without credentials
 categories: [Active Directory]
-tags: [Active Direcotory, Initial Access, Enumeration]
+tags: [Active Directory, Initial Access, Enumeration]
 weight: 2
 ---
 
-The information we can glean without a set of domain credentials are limited. We can use network enumeration techniques to identify active hosts on the network, enumerate the services running via port scanning, and get a partial list of domain users. Keep in mind that some methods below, epecially those that interact with the target hosts directly, can create noise in the target network. They should be avoided if stealth is a concern for the engagement.
+The information we can glean without a set of domain credentials is limited. We can use network enumeration techniques to identify active hosts on the network, enumerate the services running via port scanning, and get a partial list of domain users. Keep in mind that some methods below, especially those that interact with the target hosts directly, can create noise in the target network. They should be avoided if stealth is a concern for the engagement.
 
 We assume we are positioned on a machine directly connected to the target network running Active Directory.
 
 ## Passive Host Identification
-First, we may find some hosts on the network by listening on the network. We may use **Wireshark** to capture and inspect packets, or if GUI is not available, we can use command-line utilities such as `tcpdump` to save output to a pcap file, transfer the pacp file to another machine, and analyze it offline.
+First, we may find some hosts on the network by listening on the network. We may use **Wireshark** to capture and inspect packets, or if a GUI is not available, we can use command-line utilities such as `tcpdump` to save output to a pcap file, transfer the pcap file to another machine, and analyze it offline.
 ```bash
-sudo tcpdump -i <iface>
+sudo tcpdump -i <iface> -w <capture_file.pcap>
 ```
-Particularly, we want to pay attention to **ARP** and **LLMNR/NBNS/MDNS** packets, as the former reveals IP address, and the latter reveals IP address associations with hostnames.
+In particular, we want to pay attention to **ARP** and **LLMNR/NBT-NS/mDNS** packets. ARP reveals local IP-to-MAC address mappings; name-resolution queries reveal requested names, while responses may associate those names with IP addresses. We only see traffic that reaches our capture interface, not all traffic on a switched network.
 
-Alternatively, **Responder**'s analysis mode can be used to lisen for **LLMNR/NBNS/MDNS** requests and responses without poisoning them.
+Alternatively, **Responder**'s analysis mode can be used to observe **LLMNR/NBT-NS/mDNS** traffic without poisoning name-resolution requests.
 ```bash
 sudo responder -I ens224 -A
 ```
@@ -25,14 +25,14 @@ sudo responder -I ens224 -A
 ## Active Host Identification
 We can do a quick ICMP sweep of the subnet using `fping`, which can issue ICMP ping requests to a list of multiple hosts at once.
 
-> Note that many Windows hosts, especially workstation editiions (Windows 11, Windows 10, etc.) may be configured to not to respond to ping requests by default.
+> Note that many Windows hosts, especially workstation editions (Windows 11, Windows 10, etc.) may be configured not to respond to ping requests by default.
 
 ```bash
 fping -asgq 10.10.0.0/24
 ```
 - `-a` for showing alive hosts.
 - `-s` for printing cumulative stats upon exit.
-- `-g` for generating a list of host from the CIDR network notation specified
+- `-g` for generating a list of hosts from the CIDR network notation specified
 - `-q` for quiet output, hiding per-probe results
 
 ## Port Scanning and Service Enumeration
@@ -41,7 +41,7 @@ Now, we may use Nmap to scan the ports of the active hosts to find the services 
 sudo nmap -v -A -iL <host_list> -oN <output_filename>
 ```
 
-Besides just identifying the services running, Nmap's default scripts will also enumerate the hosts' hostnames, the name of the domain it belongs to, and much more.
+Besides just identifying the services running, Nmap's default scripts will also enumerate the hosts' hostnames, the names of the domains they belong to, and much more.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ sudo nmap -A 10.10.0.3 -T4
@@ -127,14 +127,14 @@ OS and Service detection performed. Please report any incorrect results at https
 Nmap done: 1 IP address (1 host up) scanned in 95.06 seconds
 ```
 Domain controllers usually have several services that are crucial for maintaining the Active Directory network:
-- DNS (53/TCP)
-- Kerberos (88/TCP, 464/TCP)
-- LDAP (389/TCP, 636/TCP, 3268/TCP, 3269/TCP)
+- DNS (53/TCP and UDP)
+- Kerberos authentication (88/TCP and UDP) and password changes (464/TCP and UDP)
+- LDAP (389/TCP; also 389/UDP for CLDAP), LDAPS (636/TCP), and Global Catalog LDAP/LDAPS (3268/TCP, 3269/TCP)
 - MSRPC (135/TCP), NetBIOS (139/TCP), SMB (445/TCP)
 
 There are also common remote management services that may be exposed on domain controllers or any other hosts on the network:
 - RDP (3389/TCP)
-- WinRM (5985/TCP)
+- WinRM (5985/TCP for HTTP, 5986/TCP for HTTPS)
 
 Other services may include MSSQL (1433/TCP) or web servers (80/TCP, 443/TCP).
 
@@ -145,7 +145,7 @@ We can passively enumerate users via OSINT. We can browse the target organizatio
 - FirstInitialLastname (`John Smith` -> `jsmith`)
 - Firstname.LastName (`John Smith` -> `john.smith`)
 
-We can actively enumerate users on the domain, even if we don't have any credentials on the domain, using `Kerbrute`, which enumerates users through Kerberos pre-authentication. This is considered a stealthier approach since Kerberos pre-auth failures doesn't generate logs by default.
+We can actively enumerate users on the domain, even if we don't have any credentials on the domain, using `Kerbrute`, which sends Kerberos requests without pre-authentication and distinguishes the KDC's responses. This avoids traditional failed-logon events (4625), but can generate Kerberos audit events such as 4768 when auditing is enabled; it is not log-free.
 ```bash
 kerbrute userenum -d <domain_name> --dc <DC_IP> <username_wordlist> -o <output_file>
 ```

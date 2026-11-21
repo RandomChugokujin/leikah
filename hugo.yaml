@@ -50,13 +50,16 @@ permalinks:
 # Image processing configuration.
 imaging:
   resampleFilter: CatmullRom
-  quality: 75
+  jpeg:
+    quality: 75
+  webp:
+    quality: 75
   anchor: smart
 
 # Language configuration
 languages:
   en:
-    languageName: English
+    label: English
     title: LEIKAH
     params:
       description: Literally Everything I Know About Hacking
@@ -189,11 +192,12 @@ params:
         desc: Check out my personal website!
 
 module:
+  proxy: direct
   # Uncomment the next line to build and serve using local docsy clone declared in the named Hugo workspace:
   # workspace: docsy.work
   hugoVersion:
     extended: true
-    min: 0.157.0
+    min: 0.170.0
   imports:
-    - path: github.com/google/docsy
+    - path: github.com/docsy/docsy/theme
       disable: false

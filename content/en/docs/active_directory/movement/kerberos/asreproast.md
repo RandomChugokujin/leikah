@@ -2,21 +2,21 @@
 title: "ASREProasting"
 description: Take advantage of users with no Kerberos pre-authentication requirements and recover their password
 categories: [Active Directory, Lateral Movement]
-tags: [Active Direcotory, Kerberoast, Lateral Movement, Privilege Escalation]
+tags: [Active Directory, ASREProasting, Lateral Movement, Privilege Escalation]
 weight: 2
 ---
 
 ## Theory
 
-Normally, in order for users to obtain their **Ticket Granting Ticket (TGT)** from the **Key Distribution Center (KDC)**, they have to verify their identity via **pre-authentication**. If the verification is successful, the KDC would then send a TGT back inside its **Authentication Service Response (AS-REP)**, which is encrypted with a key derived from the user's password.
+Normally, in order for users to obtain their **Ticket Granting Ticket (TGT)** from the **Key Distribution Center (KDC)**, they have to verify their identity via **pre-authentication**. If verification is successful, the KDC sends an **Authentication Service Response (AS-REP)** containing a TGT and encrypted reply data. In the password-based exchange, the reply data is protected by a password-derived key; the TGT itself is encrypted with the `krbtgt` account's key.
 
-Active Directory has an option inside the user's **User Account Control (UAC)** settings called **Do not require Kerberos pre-authentication**. As its name suggests, the KDC would response with the **AS-REP** containing the user's encrypted TGT without first verifying the user's identity.
+Active Directory has an option in the user's **userAccountControl** flags called **Do not require Kerberos pre-authentication**. As its name suggests, the KDC can respond with an **AS-REP** without first verifying the requester's identity.
 
 ![](/img/asreproast/do_not_require_preauth.png)
 
-If this option is enabled on the target user, the Attacker can request a TGT for the user without provide the KDC with their password, then use brute-force attack to decrypt the AS-REP to obtain the user's cleartext password.
+If this option is enabled on the target user, an attacker can request an AS-REP without providing the user's password, then test password guesses offline against the encrypted reply data. Recovering the cleartext password depends on finding a matching guess; it is not decrypted directly from the TGT.
 
-The only requirement for this attack is that we control a domain user with at least standard privileges.
+The target must be an enabled account with pre-authentication disabled, and the KDC must be reachable. A valid domain login is not required if the target username is already known; the LDAP enumeration method below does use domain credentials.
 
 ## Linux Perspective
 From a Linux attacker machine, `GetNPUsers.py` from Impacket can be used to both enumerate and obtain the encrypted AS-REP. We run the Python script without the `-request` to enumerate all users with **Do not require Kerberos pre-authentication** enabled.
@@ -63,13 +63,13 @@ samaccountname     : hathaway.noa
 userprincipalname  : hathaway.noa@GUNDAM.local
 useraccountcontrol : NORMAL_ACCOUNT, DONT_EXPIRE_PASSWORD, DONT_REQ_PREAUTH
 ```
-ASREProasting can be carried on from Windows using Rubeus and the `asreproast` subcommand.
+ASREProasting can be carried out from Windows using Rubeus and the `asreproast` subcommand.
 ```cmd
 .\Rubeus.exe asreproast /user:<target_user> /nowrap /format:hashcat
 ```
 
 ## Cracking AS-REP
-Hashcat mode 18200 may be used to crack the password from a AS-REP (`$krb5asrep$23$`).
+Hashcat mode 18200 may be used to crack the password from an RC4 AS-REP (`$krb5asrep$23$`); it is not the mode for every AS-REP encryption type.
 ```bash
 hashcat -m 18200 <asrep_file> <wordlist>
 ```

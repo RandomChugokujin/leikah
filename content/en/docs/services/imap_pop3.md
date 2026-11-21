@@ -7,49 +7,49 @@ tags: [Services, IMAP, POP3, Email]
 
 ## Service Info
 - Name: Internet Message Access Protocol (IMAP) / Post Office Protocol 3 (POP3)
-- Purpose: Retreiving / Managing email from remote mail server.
+- Purpose: Retrieving and managing email on a remote mail server.
 - Listening port:
-    - POP3: 110/TCP, 995/TCP (SSL)
-    - IMAP: 143/TCP, 993/TCP (SSL)
+    - POP3: 110/TCP, 995/TCP (implicit TLS)
+    - IMAP: 143/TCP, 993/TCP (implicit TLS)
 - OS: Unix-Like, Windows
 
-**Internet Message Access Protocol (IMAP)** allows management of emails directly on remote servers. It synchronizes local email clients with mailbox on the server while organizing them into folder-like structures. IMAP is unencrypted by default, and TLS may be used to establish an encrypted IMAP session.
+**Internet Message Access Protocol (IMAP)** allows management of emails directly on remote servers. It synchronizes local email clients with mailboxes on the server while organizing them into folder-like structures. IMAP is unencrypted by default, and TLS may be used to establish an encrypted IMAP session.
 
-**Post Office Protocol 3 (POP3)** is the more minimalistic counterpart to IMAP. It only supports the download of mail from a remote server to a mail client. The message on the server is then deleted after download, ensuring each message is only kept on one device.Like IMAP, POP3 is unencrypted by default.
+**Post Office Protocol 3 (POP3)** is a more minimal counterpart to IMAP, primarily used to download mail from a remote server. Downloading a message with `RETR` does not itself delete it: clients normally mark messages with `DELE`, and deletion is committed when the session ends with `QUIT`. Clients can leave messages on the server. Port 110 starts without encryption unless upgraded with `STLS`; port 995 uses implicit TLS.
 
 ## Service Commands
-Both IMAP and POP3 operate through the use of command like SMTP.
+Like SMTP, both IMAP and POP3 use text commands.
 
 ### IMAP Commands
 - `1 LOGIN username password`: User's login.
 - `1 LIST "" *`: Lists all directories.
-- `1 CREATE "INBOX"`: Creates a mailbox with a specified name.
-- `1 DELETE "INBOX"`: Deletes a mailbox.
+- `1 CREATE "ToRead"`: Creates a mailbox with the specified name.
+- `1 DELETE "ToRead"`: Deletes a mailbox; deleting `INBOX` is not permitted.
 - `1 RENAME "ToRead" "Important"`: Renames a mailbox.
-- `1 LSUB "" *`: Returns a subset of names from the set of names that the User has declared as being active or subscribed.
+- `1 LSUB "" *`: Returns a subset of names from the set of names that the user has declared as being active or subscribed.
 - `1 SELECT INBOX`: Selects a mailbox so that messages in the mailbox can be accessed.
-- `1 UNSELECT INBOX`: Exits the selected mailbox.
-- `1 FETCH <ID> all`: Retrieves data associated with a message in the mailbox.
-- `1 CLOSE`: Removes all messages with the Deleted flag set.
+- `1 UNSELECT`: Exits the selected mailbox without expunging messages (requires UNSELECT support on IMAP4rev1 servers).
+- `1 FETCH <ID> ALL`: Retrieves flags, internal date, size, and envelope for a message sequence number; use `1 FETCH <ID> BODY[]` to retrieve its full contents.
+- `1 CLOSE`: Closes the selected mailbox and permanently removes messages marked `\Deleted` if it is open read-write.
 - `1 LOGOUT`: Closes the connection with the IMAP server.
 
 ### POP3 Commands
 - `USER username`: Identifies the user.
-- `PASS password`: Authentication of the user using its password.
-- `STAT`: Requests the number of saved emails from the server.
-- `LIST`: Requests from the server the number and size of all emails.
+- `PASS password`: Authenticates the user using their password.
+- `STAT`: Requests the message count and total size in octets.
+- `LIST`: Lists message numbers and sizes in octets.
 - `RETR id`: Requests the server to deliver the requested email by ID.
-- `DELE id`: Requests the server to delete the requested email by ID.
+- `DELE id`: Marks the message number for deletion when `QUIT` ends the transaction.
 - `CAPA`: Requests the server to display the server capabilities.
-- `RSET`: Requests the server to reset the transmitted information.
-- `QUIT`: Closes the connection with the POP3 server.
+- `RSET`: Clears deletion marks set during the session.
+- `QUIT`: Ends the session and commits pending deletions if issued from the transaction state.
 
 ## Service Scanning
 Nmap Scan:
 ```bash
 sudo nmap <host> -sVC -p110,143,993,995
 ```
-The hostname can be gleaned from the `commonName` field in the SSL certicate.
+A candidate hostname may be found in the certificate's `commonName` or subject alternative names.
 ```txt
 Starting Nmap 7.80 ( https://nmap.org ) at 2021-09-19 22:09 CEST
 Nmap scan report for 10.129.14.128
@@ -89,7 +89,7 @@ telnet <host> 110
 telnet <host> 143
 ```
 
-The `openssl` utility may also be used to communciated with encrypted IMAP and POP3.
+The `openssl` utility may also be used to communicate with IMAP and POP3 over implicit TLS.
 ```bash
 openssl s_client -connect <host>:pop3s
 openssl s_client -connect <host>:imaps
@@ -98,13 +98,13 @@ openssl s_client -connect <host>:imaps
 ## Service Attacks
 
 ### Password Attacks
-Hydra may be used to conduct password attacks both IMAP(S) and POP3(S). On a mail server, it is very likely that these services are managed by the same software as SMTP. More often than not, using Hydra against one of the three services is enough to uncover user credentials for the email service.
+Hydra may be used to conduct password attacks against both IMAP(S) and POP3(S). On a mail server, it is very likely that these services are managed by the same software as SMTP. More often than not, using Hydra against one of the three services is enough to uncover user credentials for the email service.
 ```bash
-hydra -l <username> -P <password_list> host <imap|imaps|pop3|pop3s>
+hydra -l <username> -P <password_list> <host> <imap|imaps|pop3|pop3s>
 ```
 
 ### Reading Email
-If we find a set a credentials, we can connect to the IMAP/POP3 services to read emails belonging to that user.
+If we find a set of credentials, we can connect to the IMAP/POP3 services to read emails belonging to that user. In the captured IMAP example below, use `1 LIST "" *` (with a space before `*`); the recorded command omits that separator.
 
 IMAP:
 ```txt

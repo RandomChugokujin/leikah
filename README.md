@@ -2,67 +2,60 @@
 
 Stands for **Literally Everything I Know About Hacking**.
 
-LEIKAH is an ethical hacking technical documentation website built with [Hugo](https://gohugo.io/) static site generator and [Doscy](https://github.com/google/docsy) template.
+LEIKAH is an ethical hacking technical documentation website built with the [Hugo](https://gohugo.io/) static site generator and the [Docsy](https://github.com/docsy/docsy) theme.
 
 ## Goals
-- Document the techniques, tools, commands, and their corresponding sample outputs used in ethical hacking
+
+- Document the techniques, tools, commands, and their corresponding sample outputs used in ethical hacking.
 - Provide contextual knowledge for readers to understand under what circumstances to best use each technique and how to perform troubleshooting.
 
-## Who is this website for
+## Who is this website for?
+
 This website is for you if:
-- You are a cybersecurity industry professional
-- You are a student studying ethical hacking (OSCP, CPTS, CRTO, etc.)
+
+- You are a cybersecurity industry professional.
+- You are a student studying ethical hacking (OSCP, CPTS, CRTO, etc.).
 
 ## Running the website locally
 
-Building and running the site locally requires a recent `extended` version of [Hugo](https://gohugo.io) and a recent version of [go](https://go.dev/dl/).
-You can find out more about how to install Hugo for your environment in Docsy's
-[Getting started](https://www.docsy.dev/docs/getting-started/#prerequisites-and-installation) guide.
+Prerequisites: Node.js 26 with npm, and Go 1.26.3 or later.
 
-Once you've made your working copy of the site repo, from the repo root folder, run:
+The project pins Docsy **0.18.1**, Hugo **0.170.0**, and Dart Sass **1.106.1**. Hugo and Sass are installed locally by npm; no global Sass installation is required when using the npm commands below.
+
+From the repository root:
 
 ```bash
-npm install && hugo server
+npm ci
+npm run serve
 ```
 
-Then, navigate to `http://localhost:1313` inside your browser and you should be able to view a local version of this website.
+Open <http://localhost:1313/en/>. Hugo watches the source files and refreshes the browser when they change. To include draft pages, use `npm run serve -- -D`.
+
+For a production build:
+
+```bash
+npm run build:production
+```
+
+The output is written to `public/`.
+
+## Updating Docsy
+
+The theme uses the Hugo module path `github.com/docsy/docsy/theme`. After deliberately changing its pinned version, synchronize the generated npm workspace and lockfile:
+
+```bash
+npm run hugo -- mod get github.com/docsy/docsy/theme@v0.18.1
+npm run hugo -- mod tidy
+npm run hugo -- mod npm pack
+npm install
+npm run build:production
+```
+
+Commit `go.mod`, `go.sum`, `package.json`, `package-lock.json`, and `packages/hugoautogen/package.json` when they change. Review the [Docsy upgrade guide](https://www.docsy.dev/blog/2026/0.18.1/) before upgrading to another release.
 
 ## Troubleshooting
 
-As you run the website locally, you may run into the following error:
-
-```console
-$ hugo server
-WARN 2023/06/27 16:59:06 Module "project" is not compatible with this Hugo version; run "hugo mod graph" for more information.
-Start building sites …
-hugo v0.101.0-466fa43c16709b4483689930a4f9ac8add5c9f66+extended windows/amd64 BuildDate=2022-06-16T07:09:16Z VendorInfo=gohugoio
-Error: Error building site: "C:\Users\foo\path\to\docsy-example\content\en\_index.md:5:1": failed to extract shortcode: template for shortcode "blocks/cover" not found
-Built in 27 ms
-```
-
-This error occurs if you are running an outdated version of Hugo. As of docsy theme version `v0.12.0`, hugo version `0.146.0` or higher is required.
-See this [section](https://www.docsy.dev/docs/get-started/docsy-as-module/installation-prerequisites/#install-hugo) of the user guide for instructions on how to install Hugo.
-
-Or you may be confronted with the following error:
-
-```console
-$ hugo server
-
-INFO 2021/01/21 21:07:55 Using config file:
-Building sites … INFO 2021/01/21 21:07:55 syncing static files to /
-Built in 288 ms
-Error: Error building site: TOCSS: failed to transform "scss/main.scss" (text/x-scss): resource "scss/scss/main.scss_9fadf33d895a46083cdd64396b57ef68" not found in file cache
-```
-
-This error occurs if you have not installed the extended version of Hugo.
-See this [section](https://www.docsy.dev/docs/get-started/docsy-as-module/installation-prerequisites/#install-hugo) of the user guide for instructions on how to install Hugo.
-
-Or you may encounter the following error:
-
-```console
-$ hugo server
-
-Error: failed to download modules: binary with name "go" not found
-```
-
-This error occurs if the `go` programming language is not available on your system. Ensure that `go` version 1.12 or higher is installed on your system.
+- **Dart Sass / `TOCSS-DART` error:** use `npm run serve`, not a bare `hugo server`. npm adds the project's Hugo and Sass executables to `PATH`. For a one-off Hugo command, use `npm run hugo -- <arguments>`. Run `npm ci` if dependencies are missing.
+- **Wrong title, missing pages, or ignored settings:** the main site configuration is `hugo.yaml`. Do not add a competing `hugo.toml` or `hugo.json` at the repository root; Hugo selects one main configuration file rather than merging them automatically.
+- **Missing Go executable:** install Go and make sure `go version` works. Hugo uses Go to resolve the Docsy module.
+- **Dependency workspace out of sync:** run `npm run hugo -- mod npm pack`, then `npm install`.

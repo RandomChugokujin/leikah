@@ -8,35 +8,35 @@ tags: [Services, SMTP, Email]
 ## Service Info
 - Name: Simple Mail Transfer Protocol (SMTP)
 - Purpose: Sending emails over an IP network.
-- Listening port: **TCP port 25**, **TCP port 587** (Encrypted Transport)
+- Listening ports: **25/TCP** (mail transfer), **587/TCP** (message submission, commonly upgraded with STARTTLS), **465/TCP** (submission over implicit TLS)
 - OS: Unix-Like, Windows
 
-SMTP faciliates the transfer of mail between a client and a mail server, or between two mail servers. Originally, SMTP did not include user authencation nor transport encryption. Both features are implemented in **Extended Simple Mail Transfer Protocol (ESMTP)**, which faciliates most mail services today.
+SMTP facilitates the transfer of mail between a client and a mail server, or between two mail servers. Original SMTP included neither user authentication nor transport encryption. ESMTP provides an extension framework used by features such as `AUTH` and `STARTTLS`; support and policy must be checked on each server.
 
 The process of sending an email using SMTP is as follows:
-1. The SMTP client (**Mail User Agent**) converts email into a header and a body and uploads both to the SMTP Server (**Mail Transfer Agent**)
-2. MTA checks email for size and spam then stores it.
-3. MTA sends email to the destination SMTP Server (**Mail Delivery Agent**), where the data packets will be reassembled into a complete email.
-4. Mail Delivery Agent transfers it to the recipient's mailbox
+1. A **Mail User Agent (MUA)** submits a message, consisting of headers and a body, to a **Mail Submission Agent (MSA)**.
+2. The submission server applies policy checks and queues the message for transfer.
+3. One or more **Mail Transfer Agents (MTAs)** relay the message to the recipient's mail system.
+4. A **Mail Delivery Agent (MDA)** delivers the message to the recipient's mailbox.
 
 ### SMTP Commands
 SMTP communications are facilitated with commands. Common SMTP commands include:
 - `AUTH PLAIN`: AUTH is a service extension used to authenticate the client.
-- `HELO`: The client logs in with its computer name and thus starts the session.
+- `HELO`: Identifies the SMTP client to the server; it does not authenticate the user.
 - `EHLO`: Extended version of the `HELO` command. The server would respond with a list of its capabilities
 - `MAIL FROM`: The client names the email sender.
 - `RCPT TO`: The client names the email recipient.
 - `DATA`: The client initiates the transmission of the email.
 - `RSET`: The client aborts the initiated transmission but keeps the connection between client and server.
 - `VRFY`: The client checks if a mailbox is available for message transfer.
-- `EXPN`: The client also checks if a mailbox is available for messaging with this command.
+- `EXPN`: Requests the membership of a mailing list, if the server permits expansion.
 - `NOOP`: The client requests a response from the server to prevent disconnection due to time-out.
 - `QUIT`: The client terminates the session.
 
 
 ## Service Enumeration
 
-The default script scan (`-sC`) runs `smtp-command`, which uses the `EHLO` command to list out the available commands on the server.
+The default script scan (`-sC`) includes `smtp-commands`, which uses `EHLO` and `HELP` to discover supported extensions and commands.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ sudo nmap 10.10.0.25 -sC -sV -p25
@@ -89,7 +89,7 @@ EHLO mail1
 ```
 
 ### User Enumeration
-Commands such as `VRFY`, `EXPN`, and `RCPT TO` may be used to enumerate users on the system.
+Commands such as `VRFY`, `EXPN`, and `RCPT TO` may expose valid recipients, depending on server policy. A `252` reply means the server cannot verify the user but will accept a message for attempted delivery; it does not confirm that the account exists.
 
 VRFY:
 ```shell-session
@@ -108,8 +108,8 @@ VRFY new-user
 550 5.1.1 <new-user>: Recipient address rejected: User unknown in local recipient table
 ```
 
-`EXPN` is similiar to `VRFY`, but when used with a distribution list, it will list all users on that list.
-- A quick way to get all users on the system is to try `EXPN all`
+`EXPN` requests expansion of a distribution list when supported and permitted.
+- `EXPN all` only expands a list named `all` if one exists and expansion is allowed; it is not a general command to list every user.
 
 ```shell-session
 EXPN john
@@ -123,7 +123,7 @@ EXPN support-team
 250 2.1.5 elisa@gundam.local
 ```
 
-The `RCPT TO` is usually used to identify the recipient of the email, but it can be repeated multiple times for a given message to deliver a message to multiple recipients. We can leverage this to identify users.
+`RCPT TO` identifies an envelope recipient and can be repeated for multiple recipients. Differences in responses may reveal valid recipients, but catch-all acceptance and deferred validation can obscure this. In the historical capture below, the stray `it is` line is not an SMTP command; use `MAIL FROM:<test@htb.com>` and `RCPT TO:<address>` syntax.
 ```shell-session
 MAIL FROM:test@htb.com
 it is
@@ -155,7 +155,7 @@ smtp-user-enum -M <command> -U <userlist> -D <domain> -t <host>
 ```
 
 ### Sending Email
-We can send an email to a number of valid recipients within the `telnet` session with an SMTP server.
+We can send an email to valid recipients within a `telnet` session with an SMTP server if its relay/submission policy permits it. The captured message below is missing the required blank line between headers and body; insert one after the `Date:` header when reproducing it. Also use `Sep`, not `Sept`, as the month abbreviation in that header.
 ```shell-session
 EHLO gundam.local
 
@@ -200,7 +200,7 @@ QUIT
 Connection closed by foreign host.
 ```
 
-Alternatively, we can use [swaks](https://github.com/jetmore/swaks), a command line SMTP testing tool to send mail.
+Alternatively, we can use [swaks](https://github.com/jetmore/swaks), a command-line SMTP testing tool, to send mail.
 ```bash
 swaks --from <sender> --to <recipient> --header <email_header> --body <email_body> --server <host>
 ```

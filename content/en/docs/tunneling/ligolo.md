@@ -6,22 +6,22 @@ tags: [Tunneling, Ligolo]
 weight: 2
 ---
 
-[Ligolo-NG](https://github.com/nicocha30/ligolo-ng) is an advanced yet simple to use offensive security tunneling tool. It make use of a TUN network interface to route traffic to the target internal network, which effectively allow us to interact with the network as if we have a VPN connection.
+[Ligolo-NG](https://github.com/nicocha30/ligolo-ng) is an offensive security tunneling tool. It uses a TUN network interface to route supported traffic to an internal network, providing VPN-like access without a SOCKS proxy.
 
-Ligolo-NG is a preferred tool for the exam for OSCP or CPTS, as well as working on any labs that involve internal network pivoting.
+Ligolo-NG is useful in labs that involve internal network pivoting. Check the current exam rules before using it in OSCP or CPTS.
 
-## Creating Tunnel
-Suppose we have a pivot machine that shares the same network with the attacker machine (**192.168.1.0/24**) and is connected to an internal network (**10.10.0.0/24**) that is not accessible to the attacker machine. We may transfer the Ligolo agent to the pivot machine so that Ligolo can use that machine to forward traffic into the internal network.
+## Creating a Tunnel
+Suppose we have a pivot machine that shares a network with the attacker machine (**192.168.1.0/24**) and is connected to an internal network (**10.10.0.0/24**) that the attacker machine cannot access directly. Transfer the Ligolo agent to the pivot machine to forward traffic into the internal network.
 
 ![](/img/ligolo/network.png)
 
-First, we create a TUN device on the attacker machine.
+First, we create a TUN device on the attacker machine. This requires root or `CAP_NET_ADMIN`; the agent does not. Newer versions (>= 0.6) also support `interface_create` in the proxy CLI.
 ```bash
 sudo ip tuntap add user $USER mode tun ligolo
 sudo ip link set ligolo up
 ```
 
-Now, we launch the Ligolo-NG proxy on our attacker machine, which listens on port 11601 by default.
+Now, we launch the Ligolo-NG proxy on our attacker machine, which listens on port 11601 by default. The capture uses a binary named `ligolo-ng`; upstream release archives call it `proxy`. CLI names vary by release: current docs use `tunnel_start --tun ligolo`, while the captures below use `start`. Check `help` for your version.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ ligolo-ng -selfcert
@@ -49,6 +49,8 @@ Next, we transfer the Ligolo Agent to the target. Versions for Linux and Windows
 ./agent -connect <attacker_ip>:11601 -ignore-cert
 ```
 
+The `-ignore-cert` examples disable TLS certificate verification and are for isolated labs only. Prefer `-accept-fingerprint <fingerprint>`, using the value from the proxy's `certificate_fingerprint` command verified through a trusted channel.
+
 On our Ligolo CLI interface, we see that the pivot machine has connected. We may use the `session` command to select an agent for routing traffic.
 ```shell-session
 ligolo-ng » INFO[0388] Agent joined.                                 id=bc24115dfae8 name=brian@pivot01 remote="192.168.1.29:42724"
@@ -56,7 +58,7 @@ ligolo-ng » session
 ? Specify a session : 1 - brian@pivot01 - 192.168.1.29:42724 - bc24115dfae8
 [Agent : brian@pivot01] »
 ```
-We may then use the `ifconfig` command to list out the interfaces available on pivot host.
+Use the `ifconfig` command to list the interfaces available on the pivot host.
 ```shell-session
 [Agent : brian@pivot01] » ifconfig
 ┌────────────────────────────────────┐
@@ -108,11 +110,11 @@ We may then use the `ifconfig` command to list out the interfaces available on p
 │ IPv4 Address │ 172.19.0.1/16          │
 └──────────────┴────────────────────────┘
 ```
-On a separate terminal, we create a route for the network we wish to route (`10.10.0.0/24`) through the pivot machine.
+In a separate terminal, create a route for the internal network (`10.10.0.0/24`) through the TUN interface.
 ```bash
 sudo ip route add 10.10.0.0/24 dev ligolo
 ```
-We can use `ip route list` to double check if the route is properly created.
+Use `ip route list` to check the route. The captured `linkdown` flag can appear before the tunnel starts; the route alone does not confirm connectivity.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ ip route list | grep ligolo
@@ -124,7 +126,7 @@ To start tunneling, we simply send the `start` command inside the Ligolo-CLI.
 INFO[0776] Starting tunnel to brian@pivot01 (bc24115dfae8)
 ```
 
-We can run commands and programs, and the traffic to the internal network will be routed by Ligolo-NG through the pivot machine and forwarded to its destination.
+We can run commands and programs, and supported TCP, UDP and ICMP echo traffic to the routed network will be forwarded through the pivot. Ligolo-NG translates packets to agent-side sockets; it is not a raw-packet VPN. For Nmap, use `--unprivileged` (for example, with `-sT -Pn -n`) to avoid unsupported raw-packet assumptions.
 ```shell-session
 ╭─brian@rx-93-nu ~
 ╰─$ ping 10.10.0.3 -c 3
@@ -139,11 +141,11 @@ rtt min/avg/max/mdev = 3.785/4.668/6.357/1.194 ms
 ```
 
 ## Create Listeners
-If we want to have an internal host reach back to our attacker machine through the pivot host, we can create a Listener on the Ligolo-CLI. This is useful if we want to receive a reverse shell or download hosted files on an internal host. We use the `listner_add` command to create a listener on the pivot host.
+To let an internal host reach our attacker machine through the pivot host, use `listener_add` in the Ligolo CLI. This creates a listener on the pivot host, useful for receiving reverse shells or letting internal hosts download files hosted on the attacker machine.
 ```shell-session
 listener_add --addr 0.0.0.0:<listen_port> --to 127.0.0.1:<forward_port> --tcp
 ```
-With the example below, all traffic intended for TCP port 8000 on the pivot machine will be relayed to TCP port 8000 on the attacker machine.
+In the example below, connections to the listener on TCP port 8000 of the pivot machine are relayed to `127.0.0.1:8000` on the attacker machine. The pivot firewall must allow the listening port.
 ```shell-session
 [Agent : brian@pivot01] » listener_add --addr 0.0.0.0:8000 --to 127.0.0.1:8000 --tcp
 INFO[1262] Listener 0 created on remote agent!
@@ -220,14 +222,14 @@ On the Ligolo-CLI, we switch to session 2 on the newly joined `pivot02`.
 │ IPv4 Address │ 127.0.0.1/8                   │
 └──────────────┴───────────────────────────────┘
 ```
-On a separate terminal shell, we create a new TUN device for Ligolo named `ligolo-1` (name can be arbitrary), and add route for `172.16.0.0/24` through the newly created TUN device.
+In a separate terminal, create a second TUN device named `ligolo-1` (the name is arbitrary) and add a route for `172.16.0.0/24` through it. Replace `brian` with the local user running the proxy.
 ```bash
 sudo ip tuntap add user brian mode tun ligolo-1
 sudo ip link set ligolo-1 up
 sudo ip route add 172.16.0.0/24 dev ligolo-1
 ```
 
-We may now start tunneling to the second internal network (`172.16.0.0/24`) with the `start` Ligolo-CLI command. We use the `--tun` option to speicfythe TUN device we created for the second layer of tunneling.
+We may now start tunneling to the second internal network (`172.16.0.0/24`) with the `start` Ligolo-CLI command. We use the `--tun` option to specify the TUN device we created for the second layer of tunneling.
 ```shell-session
 [Agent : PIVOT02\\brian@PIVOT02] » start --tun ligolo-1
 INFO[4062] Starting tunnel to PIVOT02\\brian@PIVOT02 (005056b057d5)

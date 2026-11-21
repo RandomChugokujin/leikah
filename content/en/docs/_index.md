@@ -13,5 +13,5 @@ The information provided on this website is intended solely for educational and 
 {{< /alert >}}
 
 {{% alert title="Note" %}}
-The articles on this website is written by humans. The use of Generative AI is limited to research and writing review. Any use of Gen-AI content are disclosed in the articles.
+The articles on this website are written by humans. The use of Generative AI is limited to research and writing review. Any use of Gen-AI content is disclosed in the articles.
 {{% /alert %}}

